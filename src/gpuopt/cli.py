@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from .config import get_settings
+from .gpu_catalog import get_gpu_catalog
 from .ml.web_datasets import WebDatasetIngestion
 from .repository import ClusterRepository
 from .schemas import ClusterCreate
@@ -77,6 +78,36 @@ def command_dataset_download(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_gpu_list(args: argparse.Namespace) -> int:
+    catalog = get_gpu_catalog()
+    entries = catalog.query(
+        vendor=args.vendor, segment=args.segment,
+        min_vram=args.min_vram,
+        capabilities=[c.strip() for c in args.capabilities.split(",")] if args.capabilities else None,
+    )
+    if args.json:
+        print(json.dumps(entries, indent=2))
+    else:
+        print(f"{'Model':42} {'VRAM':8} {'Bus':6} {'TDP':6} {'TF16':8} {'Capabilities'}")
+        print("-" * 120)
+        for e in entries:
+            caps = ", ".join(e.get("capabilities", [])[:4])
+            bw = e.get("memory_bus_bits", 0)
+            print(f"{e['model_short']:42} {e['vram_gib']:>4.0f}GB {bw:>4}bit {e['tdp_watts']:>4.0f}W {e['tensor_tflops_fp16']:>6.0f}  {caps}")
+        print(f"\nTotal: {len(entries)} GPUs")
+    return 0
+
+
+def command_gpu_lookup(args: argparse.Namespace) -> int:
+    from .gpu_catalog import lookup_gpu
+    entry = lookup_gpu(args.name)
+    if entry:
+        print(json.dumps(entry.to_dict(), indent=2))
+    else:
+        print(f"No GPU found matching '{args.name}'")
+    return 1 if not entry else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gpuopt")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -98,6 +129,19 @@ def build_parser() -> argparse.ArgumentParser:
     ds_dl.add_argument("name", help="Dataset name or 'all'")
     ds_dl.add_argument("--force", action="store_true", help="Force re-download")
     ds_dl.set_defaults(func=command_dataset_download)
+
+    gpu = subparsers.add_parser("gpu", help="Query GPU catalog")
+    gpu_sub = gpu.add_subparsers(dest="subcommand", required=True)
+    gpu_list = gpu_sub.add_parser("list", help="List GPUs with optional filters")
+    gpu_list.add_argument("--vendor", help="Filter by vendor (nvidia, amd, intel)")
+    gpu_list.add_argument("--segment", help="Filter by segment (consumer, workstation, data_center, entry)")
+    gpu_list.add_argument("--min-vram", type=float, help="Minimum VRAM in GB")
+    gpu_list.add_argument("--capabilities", help="Comma-separated capability filters")
+    gpu_list.add_argument("--json", action="store_true", help="JSON output")
+    gpu_list.set_defaults(func=command_gpu_list)
+    gpu_lookup = gpu_sub.add_parser("lookup", help="Look up a GPU by name")
+    gpu_lookup.add_argument("name", help="GPU model name to look up")
+    gpu_lookup.set_defaults(func=command_gpu_lookup)
     return parser
 
 

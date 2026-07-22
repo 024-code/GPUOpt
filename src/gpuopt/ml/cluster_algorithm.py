@@ -13,6 +13,17 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+class GpuCapabilityRequirement(Enum):
+    RAY_TRACING = "ray_tracing"
+    TENSOR_CORES = "tensor_cores"
+    AV1_ENCODE = "av1_encode"
+    ECC_MEMORY = "ecc"
+    NV_LINK = "nvlink"
+    DLSS = "dlss_"
+    FSR = "fsr_"
+    XESS = "xess_"
+
+
 class SchedulingPolicy(Enum):
     ROUND_ROBIN = "round_robin"
     LEAST_LOADED = "least_loaded"
@@ -110,6 +121,27 @@ class DrainRecommendation:
 
 
 class ClusterManagementAlgorithm:
+    _catalog: Any = None
+
+    @classmethod
+    def _get_catalog(cls) -> Any:
+        if cls._catalog is None:
+            try:
+                from ..gpu_catalog import get_gpu_catalog
+                cls._catalog = get_gpu_catalog()
+            except Exception:
+                cls._catalog = False
+        return cls._catalog if cls._catalog else None
+
+    @staticmethod
+    def _check_gpu_capability(gpu_model: str, requirement: str) -> bool:
+        catalog = ClusterManagementAlgorithm._get_catalog()
+        if not catalog:
+            return True
+        entry = catalog.lookup(gpu_model)
+        if not entry:
+            return True
+        return requirement in entry.capabilities.summary()
     def __init__(self, predictor: Any = None) -> None:
         self._predictor = predictor
         self.scheduling_policy: SchedulingPolicy = SchedulingPolicy.HYBRID

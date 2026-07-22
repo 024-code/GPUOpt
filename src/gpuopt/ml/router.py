@@ -205,3 +205,41 @@ def power_cap_analysis() -> list[dict]:
 @router.get("/drain-recommendations")
 def drain_recommendations() -> list[dict]:
     return _engine.drain_recommendations()
+
+
+@router.get("/gpu-catalog")
+def list_gpu_catalog(
+    vendor: str | None = Query(default=None),
+    segment: str | None = Query(default=None),
+    min_vram: float | None = Query(default=None, ge=1),
+    capabilities: str | None = Query(default=None, description="Comma-separated: av1_encode,ray_tracing,tensor_cores,ecc,nvlink"),
+) -> list[dict]:
+    return _engine.list_gpu_catalog(vendor, segment, min_vram, capabilities)
+
+
+@router.get("/gpu-catalog/stats")
+def gpu_catalog_stats() -> dict:
+    return _engine.get_gpu_catalog_stats()
+
+
+@router.get("/gpu-catalog/lookup")
+def lookup_gpu(name: str = Query(description="GPU model name to look up")) -> dict | None:
+    return _engine.lookup_gpu(name)
+
+
+@router.post("/schedule-with-capability")
+def schedule_job_with_capability(
+    name: str = Query(default="", max_length=200),
+    required_gpus: int = Query(default=1, ge=1, le=256),
+    required_memory_gib: float = Query(default=8.0, ge=0.1, le=1024),
+    estimated_runtime_hours: float = Query(default=1.0, ge=0.1, le=8760),
+    priority: int = Query(default=5, ge=1, le=10),
+    workload_type: str = Query(default="llm_inference"),
+    policy: str | None = Query(default=None),
+    required_capabilities: str | None = Query(default=None, description="Comma-separated capability requirements"),
+) -> dict:
+    return _engine.schedule_job_with_capability(
+        name, required_gpus, required_memory_gib,
+        estimated_runtime_hours, priority, workload_type,
+        policy, required_capabilities,
+    )

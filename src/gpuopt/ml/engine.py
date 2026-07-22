@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 
+from ..gpu_catalog import get_gpu_catalog
 from .automl import AutoMLEngine
 from .closed_loop import ClosedLoopTrainer
 from .cluster_algorithm import ClusterManagementAlgorithm
@@ -331,6 +332,79 @@ class MLEngine:
              "urgency": d.urgency, "action": d.suggested_action, "reason": d.reason}
             for d in drains
         ]
+
+    def list_gpu_catalog(
+        self,
+        vendor: str | None = None,
+        segment: str | None = None,
+        min_vram: float | None = None,
+        capabilities: str | None = None,
+    ) -> list[dict]:
+        cap_list = [c.strip() for c in capabilities.split(",")] if capabilities else None
+        return get_gpu_catalog().query(vendor=vendor, segment=segment, min_vram=min_vram, capabilities=cap_list)
+
+    def lookup_gpu(self, name: str) -> dict | None:
+        entry = get_gpu_catalog().lookup(name)
+        return entry.to_dict() if entry else None
+
+    def get_gpu_catalog_stats(self) -> dict:
+        cat = get_gpu_catalog()
+        return {
+            "total_entries": len(cat.entries),
+            "by_vendor": {v: len(g) for v, g in cat.group_by_vendor().items()},
+            "by_segment": {s: len(g) for s, g in cat.group_by_segment().items()},
+            "training_capable": len(cat.get_training_capable()),
+            "inference_capable": len(cat.get_inference_capable()),
+            "vendors": ["nvidia", "amd", "intel"],
+            "segments": ["consumer", "workstation", "data_center", "entry"],
+        }
+
+    def schedule_job_with_capability(
+        self,
+        name: str = "",
+        required_gpus: int = 1,
+        required_memory_gib: float = 8.0,
+        estimated_runtime_hours: float = 1.0,
+        priority: int = 5,
+        workload_type: str = "llm_inference",
+        policy: str | None = None,
+        required_capabilities: str | None = None,
+    ) -> dict:
+        from .cluster_algorithm import JobSpec, SchedulingPolicy
+        from .node_simulation import ClusterTopology
+        caps = [c.strip() for c in required_capabilities.split(",")] if required_capabilities else []
+        job = JobSpec(
+            job_id=f"job-{uuid.uuid4().hex[:8]}",
+            name=name, required_gpus=required_gpus,
+            required_memory_gib=required_memory_gib,
+            estimated_runtime_hours=estimated_runtime_hours,
+            priority=priority, workload_type=workload_type,
+        )
+        topo = ClusterTopology().build_dgx_h100(2)
+        mgr = self.cluster_manager
+        if policy:
+            mgr.scheduling_policy = SchedulingPolicy(policy)
+        decision = mgr.schedule_job(job, topo)
+
+        cap_check = {}
+        for cap in caps:
+            cap_check[cap] = all(
+                ClusterManagementAlgorithm._check_gpu_capability(
+                    topo.get_gpu(0, 0).spec.model, cap,
+                ) for nid, gidx in decision.assigned_gpus
+            )
+
+        return {
+            "job_id": decision.job_id,
+            "assigned_gpus": [f"{n}:GPU{g}" for n, g in decision.assigned_gpus],
+            "policy": decision.policy.value,
+            "predicted_failure_risk": round(decision.predicted_failure_risk, 4),
+            "estimated_power_watts": round(decision.estimated_power_watts, 1),
+            "thermal_headroom_c": round(decision.thermal_headroom_c, 1),
+            "score": round(decision.score, 4),
+            "rationale": decision.rationale,
+            "capability_check": cap_check,
+        }
 
     def health(self) -> dict:
         return {
