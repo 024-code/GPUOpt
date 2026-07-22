@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import __version__
 from .config import get_settings
-from .dependencies import get_repository
+from .dependencies import (
+    get_digital_twin,
+    get_repository,
+    get_scheduler_service,
+    get_state_service,
+)
 from .domains.collectors import DomainCollector
 from .domains.stores import RingStore, get_domain_store
 from .healing.auto_healer import AutoHealer
@@ -23,8 +30,29 @@ from .policy.evolution import PolicyEvolutionEngine
 from .predictor.failure_predictor import FailurePredictor
 from .registry import get_registry
 from .scheduler.rl_scheduler import Job, Node, RLScheduler
+from .schemas import WorkloadRequirements
 
 logger = logging.getLogger(__name__)
+
+
+class JobSubmissionRequest(BaseModel):
+    cluster_id: UUID
+    job_name: str = Field(min_length=1, max_length=200)
+    required_gpus: int = Field(default=1, ge=1, le=256)
+    required_cpu_cores: Optional[int] = Field(default=1, ge=1)
+    required_memory_gb: float = Field(default=8.0, ge=0.1)
+    estimated_runtime_hours: float = Field(default=1.0, ge=0.1)
+    priority: int = Field(default=5, ge=1, le=10)
+    model_name: Optional[str] = None
+    checkpointable: bool = False
+
+
+class JobSubmissionResponse(BaseModel):
+    status: str
+    job_id: Optional[str] = None
+    message: str
+    simulation_results: Optional[dict] = None
+    placement: Optional[dict] = None
 
 V1_PREFIX = "/api/v1"
 V2_PREFIX = "/api/v2"
@@ -66,9 +94,9 @@ def create_v2_router() -> APIRouter:
             {
                 "id": str(c.id),
                 "name": c.name,
+                "environment": c.environment,
                 "connector_type": c.connector_type.value if hasattr(c.connector_type, "value") else str(c.connector_type),
-                "status": c.status.value if hasattr(c.status, "value") else str(c.status),
-                "region": c.region or "",
+                "description": c.description or "",
                 "created_at": c.created_at.isoformat() if c.created_at else "",
             }
             for c in repo.list_clusters()
@@ -83,9 +111,9 @@ def create_v2_router() -> APIRouter:
         return {
             "id": str(c.id),
             "name": c.name,
+            "environment": c.environment,
             "connector_type": c.connector_type.value if hasattr(c.connector_type, "value") else str(c.connector_type),
-            "status": c.status.value if hasattr(c.status, "value") else str(c.status),
-            "region": c.region or "",
+            "description": c.description or "",
             "created_at": c.created_at.isoformat() if c.created_at else "",
         }
 
@@ -251,6 +279,198 @@ def create_v2_router() -> APIRouter:
     @router.get("/healing/history")
     def healing_history(limit: int = 50) -> list[dict]:
         return _healer.get_history(limit)
+
+    # ── ML-Powered Job Submission ─────────────────────────
+
+    @router.post("/submit-job", response_model=JobSubmissionResponse)
+    def submit_job(req: JobSubmissionRequest) -> JobSubmissionResponse:
+        cluster_id = req.cluster_id
+
+        repo = get_repository()
+        cluster = repo.get_cluster(cluster_id)
+        if cluster is None:
+            raise HTTPException(status_code=404, detail=f"Cluster not found: {cluster_id}")
+
+        state_svc = get_state_service()
+        state = state_svc.get_latest_state(cluster_id)
+        if state is None:
+            raise HTTPException(status_code=400, detail="No cluster state available. Collect state first.")
+
+        free_gpus = sum(
+            1 for n in state.nodes for g in n.gpu_devices
+            if g.memory_used_bytes == 0
+        )
+        if free_gpus < req.required_gpus:
+            return JobSubmissionResponse(
+                status="rejected",
+                message=f"Insufficient GPUs: requested {req.required_gpus}, available {free_gpus}",
+                simulation_results={"free_gpus": free_gpus, "total_gpus": state.gpu_count},
+            )
+
+        telemetry = state.telemetry
+        node_predictions: dict[str, dict] = {}
+        if telemetry:
+            for nt in telemetry.nodes:
+                avg_gpu_util = 0.0
+                avg_mem_util = 0.0
+                avg_temp = 0.0
+                avg_power = 0.0
+                ecc = 0
+                xid = 0
+                devs = nt.gpu_devices
+                if devs:
+                    avg_gpu_util = sum(d.utilization_gpu_percent for d in devs) / len(devs)
+                    avg_mem_util = sum(d.utilization_memory_percent for d in devs) / len(devs)
+                    avg_temp = sum(d.temperature_gpu_celsius for d in devs) / len(devs)
+                    avg_power = sum(d.power_draw_watts for d in devs) / len(devs)
+                    ecc = sum(d.ecc_errors_volatile + d.ecc_errors_aggregate for d in devs)
+                    xid = 0
+                payload = {
+                    "gpu_utilization": avg_gpu_util,
+                    "memory_utilization": avg_mem_util,
+                    "temperature": avg_temp,
+                    "power_usage": avg_power,
+                    "clock_speed": devs[0].clock_sm_mhz if devs else 0,
+                    "ecc_errors": ecc,
+                    "retired_pages": 0,
+                    "xid_errors": xid,
+                    "utilization_variance": 0.1,
+                    "temperature_variance": 0.1,
+                    "available_gpus": sum(1 for d in devs if d.memory_used_bytes == 0) if devs else 0,
+                    "total_gpus": len(devs),
+                    "queue_length": 0,
+                    "job_failures": 0,
+                    "job_retries": 0,
+                    "average_job_duration": req.estimated_runtime_hours * 3600,
+                }
+                node_predictions[nt.node_name] = _predictor.predict_failure(payload)
+
+        twin_svc = get_digital_twin()
+        try:
+            twin_svc.sync_twin(cluster_id)
+        except KeyError:
+            raise HTTPException(status_code=400, detail="Failed to sync digital twin")
+
+        try:
+            sch_svc = get_scheduler_service()
+            placement = sch_svc.suggest_placement(
+                cluster_id,
+                WorkloadRequirements(
+                    gpu_count=req.required_gpus,
+                    gpu_memory_bytes=int(req.required_memory_gb * (1024**3)),
+                    cpu_millicores=req.required_cpu_cores * 1000,
+                    memory_bytes=int(req.required_memory_gb * (1024**3)),
+                ),
+            )
+        except KeyError as exc:
+            return JobSubmissionResponse(
+                status="simulation_failed",
+                message=f"Placement simulation failed: {exc}",
+                simulation_results={"error": str(exc)},
+            )
+
+        high_risk_nodes: list[str] = []
+        predictions_summary: dict[str, dict] = {}
+        for node_name, pred in node_predictions.items():
+            prob = pred.get("probability", 0)
+            predictions_summary[node_name] = {
+                "failure_predicted": pred.get("failure_predicted", False),
+                "probability": prob,
+                "risk_factors": pred.get("risk_factors", []),
+            }
+            if prob > 0.7:
+                high_risk_nodes.append(node_name)
+
+        if high_risk_nodes:
+            return JobSubmissionResponse(
+                status="rejected",
+                message=f"High failure risk on nodes: {high_risk_nodes}",
+                simulation_results={
+                    "high_risk_nodes": high_risk_nodes,
+                    "predictions": predictions_summary,
+                    "placement": placement.model_dump(mode="json"),
+                },
+            )
+
+        candidate_node = placement.suggested_node
+        candidate_node_obj = next(
+            (n for n in state.nodes if n.name == candidate_node),
+            None,
+        )
+        total_on_node = len(candidate_node_obj.gpu_devices) if candidate_node_obj else 1
+        free_on_node = sum(
+            1 for g in candidate_node_obj.gpu_devices if g.memory_used_bytes == 0
+        ) if candidate_node_obj else 0
+
+        rl_nodes = [
+            Node(
+                id=n.name,
+                available_gpus=sum(1 for g in n.gpu_devices if g.memory_used_bytes == 0),
+                total_gpus=len(n.gpu_devices),
+                free_memory_gb=sum(
+                    (g.memory_total_bytes - g.memory_used_bytes) / (1024**3) for g in n.gpu_devices
+                ) / max(len(n.gpu_devices), 1),
+                gpu_model=n.gpu_devices[0].model if n.gpu_devices else "unknown",
+            )
+            for n in state.nodes
+        ]
+        rl_job = Job(
+            id=f"{req.job_name}-{int(time.time())}",
+            required_gpus=req.required_gpus,
+            priority=req.priority,
+            estimated_duration=req.estimated_runtime_hours,
+            memory_gb=req.required_memory_gb,
+            checkpointable=req.checkpointable,
+        )
+        rl_result = _rl.schedule(rl_job, rl_nodes)
+
+        schedule_success = rl_result.success
+
+        if not schedule_success:
+            return JobSubmissionResponse(
+                status="simulation_failed",
+                message=f"RL scheduler could not schedule job: {rl_result.reasoning}",
+                simulation_results={
+                    "predictions": predictions_summary,
+                    "placement": placement.model_dump(mode="json"),
+                    "rl_result": {
+                        "node_id": rl_result.node_id,
+                        "reasoning": rl_result.reasoning,
+                        "reward": rl_result.reward,
+                        "q_value": rl_result.q_value,
+                    },
+                },
+            )
+
+        job_id = rl_job.id
+        return JobSubmissionResponse(
+            status="submitted",
+            job_id=job_id,
+            message=(
+                f"Job submitted successfully to {candidate_node} "
+                f"(free: {free_on_node}/{total_on_node} GPUs, "
+                f"confidence: {placement.confidence:.0%})"
+            ),
+            simulation_results={
+                "predictions": predictions_summary,
+                "placement": placement.model_dump(mode="json"),
+                "rl_result": {
+                    "node_id": rl_result.node_id,
+                    "reward": rl_result.reward,
+                    "q_value": rl_result.q_value,
+                    "reasoning": rl_result.reasoning,
+                },
+                "free_gpus": free_gpus,
+                "total_gpus": state.gpu_count,
+            },
+            placement={
+                "suggested_node": placement.suggested_node,
+                "alternative_nodes": placement.alternative_nodes,
+                "confidence": placement.confidence,
+                "score": placement.score,
+                "reasoning": placement.reasoning,
+            },
+        )
 
     return router
 

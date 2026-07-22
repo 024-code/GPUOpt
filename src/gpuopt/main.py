@@ -5,8 +5,11 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .api import router
@@ -28,6 +31,7 @@ from .predictor import predictor_router
 from .slurm_routes import slurm_router
 from .alert_router import alert_router
 from .monitoring_router import monitoring_router
+from .rtx_routes import router as rtx_router
 from .workload_agent_router import router as workload_agent_router
 from .extended_router import router as extended_router
 from .inference_api import router as inference_api_router
@@ -125,3 +129,8 @@ app.include_router(deployment_workflow_router)
 app.include_router(gpu_usage_inventory_router)
 app.include_router(optimization_analysis_router)
 app.include_router(environment_checks_router)
+app.include_router(rtx_router)
+
+frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
+if frontend_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")

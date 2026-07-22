@@ -94,7 +94,31 @@ class MockConnector(ClusterConnector):
     def _default_snapshot() -> dict[str, Any]:
         return {
             "api_server": {"ready": True, "version": "mock-v1"},
-            "nodes": [{"name": "mock-gpu-worker", "ready": True, "gpu_count": 4}],
+            "nodes": [{
+                "name": "mock-gpu-worker",
+                "ready": True,
+                "gpu_count": 4,
+                "pod_capacity": 110,
+                "gpu_devices": [
+                    {
+                        "index": i,
+                        "uuid": f"mock-gpu-{i:04d}",
+                        "model": "RTX 4090",
+                        "memory_total": 25769803776,
+                        "memory_used": 0,
+                        "utilization_gpu": 0.0,
+                        "utilization_memory": 0.0,
+                        "temperature_gpu": 35.0,
+                        "power_draw": 30.0,
+                        "power_limit": 450.0,
+                        "ecc_errors_volatile": 0,
+                        "ecc_errors_aggregate": 0,
+                        "clock_sm": 210,
+                        "clock_mem": 1013,
+                    }
+                    for i in range(4)
+                ],
+            }],
             "components": {
                 "gpu_operator": {"ready": True},
                 "dcgm_exporter": {"ready": True, "metrics_endpoint": "mock://dcgm"},
