@@ -9,6 +9,7 @@ from .integration_extended import IntegrationManager
 from .optimization_extended import ExtendedOptimizationService
 from .prediction_extended import ComprehensivePredictionService
 from .telemetry_extended import ExtendedTelemetryService, TelemetryStreamer
+from .telemetry_quality import TelemetryQualityService
 from .training_extended import ExtendedTrainingService
 
 router = APIRouter(prefix="/api/v1/extended", tags=["extended"])
@@ -19,6 +20,7 @@ _inf = ExtendedInferenceService()
 _integration = IntegrationManager()
 _opt = ExtendedOptimizationService()
 _pred = ComprehensivePredictionService()
+_quality = TelemetryQualityService()
 _telemetry = ExtendedTelemetryService()
 _streamer = TelemetryStreamer()
 _training = ExtendedTrainingService()
@@ -171,3 +173,45 @@ async def configure_otel(service_name: str = "gpuopt", endpoint: str = ""):
 @router.post("/integration/storage/configure")
 async def configure_storage(store_type: str, endpoint: str, bucket: str, region: str = ""):
     return _integration.get_object_store().configure(store_type, endpoint, bucket, region).model_dump(mode="json")
+
+
+# ── R01: Telemetry Quality & Onboarding ───────────────────────
+
+@router.post("/telemetry/quality/score")
+async def score_telemetry_quality(snapshot: dict):
+    from .schemas import TelemetrySnapshot
+    obj = TelemetrySnapshot(**snapshot)
+    return _quality.process_snapshot(obj)
+
+
+@router.post("/telemetry/quality/data")
+async def resolve_with_fallback(source: str, data: dict | None = None, required_fields: list[str] | None = None):
+    return _quality.get_data(source, data, required_fields)
+
+
+@router.post("/telemetry/onboarding/register")
+async def register_source(name: str, source_type: str, required_fields: list[str] | None = None, critical: bool = False):
+    return _quality.onboarding.register_source(name, source_type, required_fields, critical).model_dump(mode="json")
+
+
+@router.post("/telemetry/onboarding/advance")
+async def advance_phase(source_id: str, checks_passed: int | None = None):
+    return _quality.onboarding.advance_phase(source_id, checks_passed)
+
+
+@router.get("/telemetry/onboarding/status/{source_id}")
+async def get_onboarding_status(source_id: str):
+    status = _quality.onboarding.get_status(source_id)
+    if not status:
+        return {"error": "Source not found"}
+    return status.model_dump(mode="json")
+
+
+@router.get("/telemetry/onboarding/sources")
+async def list_onboarding_sources():
+    return _quality.onboarding.list_sources()
+
+
+@router.get("/telemetry/quality/health")
+async def quality_health():
+    return _quality.health()

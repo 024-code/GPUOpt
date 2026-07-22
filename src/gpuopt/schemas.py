@@ -2312,3 +2312,66 @@ class IntegrationStatus(BaseModel):
     metrics_count: int = 0
     error_count: int = 0
     latency_ms: float = 0.0
+
+
+# ═══════════════════════════════════════════════════════════════
+# R01: Telemetry Quality & Onboarding
+# ═══════════════════════════════════════════════════════════════
+
+class TelemetryQualityScore(BaseModel):
+    source: str = ""
+    completeness: float = 1.0
+    freshness: float = 1.0
+    consistency: float = 1.0
+    accuracy: float = 1.0
+    overall: float = 1.0
+    issues: list[str] = Field(default_factory=list)
+    scored_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class TelemetryFallbackRecord(BaseModel):
+    source: str = ""
+    primary_available: bool = False
+    cache_available: bool = False
+    using_fallback: bool = False
+    fallback_reason: str = ""
+    fallback_tier: str = ""  # live, cached, degraded, default
+    data_age_seconds: float = 0.0
+    recorded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class TelemetrySourceContract(BaseModel):
+    source_id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = ""
+    source_type: str = ""
+    required_fields: list[str] = Field(default_factory=list)
+    expected_interval_seconds: float = 15.0
+    max_age_seconds: float = 300.0
+    quality_threshold: float = 0.7
+    critical: bool = False
+    enabled: bool = True
+
+
+class OnboardingPhase(BaseModel):
+    phase_id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = ""
+    description: str = ""
+    status: str = "pending"
+    readiness_score: float = 0.0
+    checks_passed: int = 0
+    checks_total: int = 0
+    started_at: str = ""
+    completed_at: str = ""
+
+
+class TelemetrySourceStatus(BaseModel):
+    source_id: str = ""
+    name: str = ""
+    source_type: str = ""
+    phase: str = "onboarding"
+    tier: str = "bronze"
+    quality: TelemetryQualityScore | None = None
+    last_data: str = ""
+    fallback_active: bool = False
+    contract_valid: bool = True
+    issues: list[str] = Field(default_factory=list)
