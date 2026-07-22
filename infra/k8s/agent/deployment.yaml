@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpuopt-agent
+  namespace: gpuopt-system
+  labels:
+    app.kubernetes.io/name: gpuopt-agent
+    app.kubernetes.io/part-of: gpuopt
+    app.kubernetes.io/version: latest
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gpuopt-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gpuopt-agent
+        app.kubernetes.io/part-of: gpuopt
+    spec:
+      serviceAccountName: gpuopt-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: operator
+          image: gpuopt/agent:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - operator
+            - --poll-interval=30
+            - --in-cluster=true
+          env:
+            - name: GPUOPT_LOG_LEVEL
+              value: "INFO"
+            - name: GPUOPT_ENV
+              value: "production"
+            - name: GPUOPT_API_KEYLESS_MODE
+              value: "false"
+            - name: GPUOPT_BACKEND_URL
+              value: "http://gpuopt-backend.gpuopt-system.svc:8080"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+        - name: telemetry
+          image: gpuopt/agent:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - collector
+            - --interval=60
+            - --backend=http://gpuopt-backend.gpuopt-system.svc:8080
+          env:
+            - name: GPUOPT_LOG_LEVEL
+              value: "INFO"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      terminationGracePeriodSeconds: 30

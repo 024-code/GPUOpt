@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-dcgm-exporter
+  namespace: gpuopt-system
+  labels:
+    app: nvidia-dcgm-exporter
+spec:
+  selector:
+    app: nvidia-dcgm-exporter
+  ports:
+    - name: metrics
+      port: 9400
+      targetPort: metrics

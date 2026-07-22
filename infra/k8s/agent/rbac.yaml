@@ -1,0 +1,46 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gpuopt-agent
+  labels:
+    app.kubernetes.io/part-of: gpuopt
+rules:
+  - apiGroups: [""]
+    resources: [nodes, pods, services, configmaps, events]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [nodes/status, pods/status]
+    verbs: [get, list, watch]
+  - apiGroups: ["apps"]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get, list, watch, patch]
+  - apiGroups: ["batch"]
+    resources: [jobs]
+    verbs: [get, list, watch]
+  - apiGroups: ["gpuopt.ai"]
+    resources: [gpuoptimizationprofiles, gpuoptimizationactions, gpuworkloadprofiles]
+    verbs: [get, list, watch, patch, update]
+  - apiGroups: ["gpuopt.ai"]
+    resources: [gpuoptimizationprofiles/status, gpuoptimizationactions/status, gpuworkloadprofiles/status]
+    verbs: [get, patch, update]
+  - apiGroups: ["autoscaling"]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: [leases]
+    verbs: [get, list, watch, create, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gpuopt-agent
+  labels:
+    app.kubernetes.io/part-of: gpuopt
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gpuopt-agent
+subjects:
+  - kind: ServiceAccount
+    name: gpuopt-agent
+    namespace: gpuopt-system

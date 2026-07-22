@@ -1,0 +1,2 @@
+# Trivy vulnerability ignore list
+# Format: <vulnerability-id> [optional comment]

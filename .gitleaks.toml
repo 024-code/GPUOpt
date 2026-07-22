@@ -1,0 +1,26 @@
+# Gitleaks config for GPUOpt
+[extend]
+# useDefault = true
+
+title = "GPUOpt gitleaks config"
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+    ".venv/",
+    "__pycache__/",
+    "*.egg-info/",
+    "node_modules/",
+    "_archive/",
+]
+
+# Allow test fixture containing example/synthetic values
+[[rules]]
+id = "mock-password-fixture"
+description = "Allow mock/example passwords in docker-compose and test fixtures"
+regex = '(?i)gpuopt.*password.*gpuopt'
+paths = [
+    "docker-compose.yml",
+    "tests/",
+    "sandbox/",
+]

@@ -1,0 +1,57 @@
+{
+  "spec": {
+    "model_name": "llama-8b",
+    "image": "vllm/vllm-openai",
+    "tag": "latest",
+    "tensor_parallelism": 1,
+    "pipeline_parallelism": 1,
+    "replicas": 2,
+    "ports": [
+      {
+        "containerPort": 8000,
+        "name": "http",
+        "protocol": "TCP"
+      }
+    ],
+    "resources": {
+      "limits": {
+        "nvidia.com/gpu": "1",
+        "cpu": "16",
+        "memory": "100Gi"
+      },
+      "requests": {
+        "cpu": "8",
+        "memory": "50Gi"
+      }
+    },
+    "env": [
+      {
+        "name": "MODEL_NAME",
+        "value": "llama-8b"
+      },
+      {
+        "name": "MAX_MODEL_LEN",
+        "value": "4096"
+      },
+      {
+        "name": "DTYPE",
+        "value": "auto"
+      }
+    ],
+    "service_type": "ClusterIP",
+    "enable_hpa": true,
+    "hpa_max_replicas": 5,
+    "hpa_target_cpu_utilization": 80,
+    "namespace": "gpuopt-system",
+    "node_selector": {
+      "gpuopt.ai/gpu-model": "mock-a100"
+    },
+    "tolerations": [
+      {
+        "key": "nvidia.com/gpu",
+        "operator": "Exists",
+        "effect": "NoSchedule"
+      }
+    ]
+  }
+}

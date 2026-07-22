@@ -1,0 +1,8 @@
+{
+  "model": "llama-8b",
+  "prompt": "Explain how tensor parallelism works in large language model inference.",
+  "max_tokens": 256,
+  "temperature": 0.7,
+  "num_requests": 20,
+  "concurrency": 4
+}

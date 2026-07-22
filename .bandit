@@ -1,0 +1,19 @@
+exclude_dirs:
+  - /tests/
+  - /.venv/
+  - /_archive/
+  - /migrations/
+skips:
+  - B101
+  - B104
+  - B105
+  - B110
+  - B301
+  - B311
+  - B303
+  - B403
+  - B404
+  - B603
+  - B607
+targets:
+  - src/

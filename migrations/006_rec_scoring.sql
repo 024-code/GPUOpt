@@ -1,0 +1,3 @@
+-- Schema migration for R0.6: Recommendation Scoring & What-if.
+-- No schema changes needed; score and status fields are embedded in recs_json.
+-- This file documents the release metadata.

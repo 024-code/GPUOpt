@@ -1,0 +1,26 @@
+clusters:
+  - name: local-mock
+    environment: sandbox
+    connector_type: mock
+    description: Local no-GPU validation using a synthetic snapshot.
+    options:
+      snapshot_path: sandbox/mock-clusters/local-kind.json
+
+  - name: local-kind
+    environment: development
+    connector_type: kubernetes
+    description: Local kind cluster with GPU labels and mock telemetry.
+    kube_context: kind-gpuopt
+    kubeconfig_path: ~/.kube/config
+    options:
+      allow_mock_gpu: true
+
+  - name: staging-gpu
+    environment: staging
+    connector_type: kubernetes
+    description: Real NVIDIA GPU staging cluster.
+    kube_context: gpuopt-staging
+    kubeconfig_path: ~/.kube/config
+    credential_ref: local-kubeconfig-context
+    options:
+      allow_mock_gpu: false

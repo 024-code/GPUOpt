@@ -1,0 +1,14 @@
+{
+  "model_name": "llama-8b",
+  "architecture": "llama",
+  "dtype": "fp16",
+  "num_layers": 32,
+  "hidden_size": 4096,
+  "num_heads": 32,
+  "num_kv_heads": 8,
+  "max_seq_len": 4096,
+  "batch_size": 1,
+  "gpu_memory_gb": 80.0,
+  "kv_cache_dtype": "fp16",
+  "overhead_factor": 1.15
+}

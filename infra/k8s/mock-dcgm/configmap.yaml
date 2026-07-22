@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mock-dcgm-metrics
+  namespace: gpuopt-system
+data:
+  metrics: |
+    # HELP DCGM_FI_DEV_GPU_UTIL GPU utilization (percent).
+    # TYPE DCGM_FI_DEV_GPU_UTIL gauge
+    DCGM_FI_DEV_GPU_UTIL{gpu="0",UUID="MOCK-GPU-0",Hostname="gpuopt-worker"} 67
+    DCGM_FI_DEV_GPU_UTIL{gpu="1",UUID="MOCK-GPU-1",Hostname="gpuopt-worker"} 21
+    # HELP DCGM_FI_DEV_FB_USED Framebuffer memory used (MiB).
+    # TYPE DCGM_FI_DEV_FB_USED gauge
+    DCGM_FI_DEV_FB_USED{gpu="0",UUID="MOCK-GPU-0",Hostname="gpuopt-worker"} 24576
+    DCGM_FI_DEV_FB_USED{gpu="1",UUID="MOCK-GPU-1",Hostname="gpuopt-worker"} 4096
+    # HELP DCGM_FI_DEV_GPU_TEMP GPU temperature (Celsius).
+    # TYPE DCGM_FI_DEV_GPU_TEMP gauge
+    DCGM_FI_DEV_GPU_TEMP{gpu="0",UUID="MOCK-GPU-0",Hostname="gpuopt-worker"} 72
+    DCGM_FI_DEV_GPU_TEMP{gpu="1",UUID="MOCK-GPU-1",Hostname="gpuopt-worker"} 51

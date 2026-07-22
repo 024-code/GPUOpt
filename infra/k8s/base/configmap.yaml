@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpuopt-config
+  namespace: gpuopt-system
+data:
+  GPUOPT_ENV: development
+  GPUOPT_DATABASE_PATH: /data/gpuopt.db
+  GPUOPT_ALLOW_MOCK_GPU: "true"
+  GPUOPT_LOG_LEVEL: INFO

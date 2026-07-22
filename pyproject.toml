@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpuopt-backend-sandbox"
+version = "0.1.0"
+description = "Runnable backend sandbox for Kubernetes-connected GPU cluster environment checks."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30,<1.0",
+  "pydantic>=2.8,<3.0",
+  "pydantic-settings>=2.4,<3.0",
+  "prometheus-client>=0.20,<1.0",
+  "PyYAML>=6.0,<7.0",
+  "kubernetes>=31.0,<35.0",
+  "httpx>=0.27,<1.0",
+  "numpy>=1.26,<2.0",
+  "scipy>=1.14,<2.0",
+  "scikit-learn>=1.5,<2.0",
+  "statsmodels>=0.14,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0,<9.0",
+  "pytest-asyncio>=0.23,<1.0",
+  "ruff>=0.6,<1.0",
+  "bandit>=1.7,<2.0",
+  "pip-audit>=2.7,<3.0",
+]
+notifications = [
+  "httpx>=0.27,<1.0",
+]
+postgres = [
+  "psycopg2-binary>=2.9,<3.0"
+]
+migration = [
+  "alembic>=1.13,<2.0"
+]
+ml = []
+slurm = [
+  "pyslurm>=0.1.0",
+]
+all = [
+  "gpuopt-backend-sandbox[dev,postgres,migration,ml,slurm,notifications]"
+]
+
+[project.scripts]
+gpuopt = "gpuopt.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,119 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gpuoptimizationactions.gpuopt.ai
+  labels:
+    app.kubernetes.io/part-of: gpuopt
+spec:
+  group: gpuopt.ai
+  names:
+    kind: GPUOptimizationAction
+    plural: gpuoptimizationactions
+    singular: gpuoptimizationaction
+    shortNames:
+      - gpuaction
+      - gact
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: ActionType
+          type: string
+          jsonPath: .spec.actionType
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - actionType
+              properties:
+                actionType:
+                  type: string
+                  enum:
+                    - scale_gpu_count
+                    - adjust_power_cap
+                    - migrate_workload
+                    - apply_recommendation
+                    - request_approval
+                targetCluster:
+                  type: string
+                recommendationRef:
+                  type: string
+                parameters:
+                  type: object
+                  properties:
+                    gpuCount:
+                      type: integer
+                    powerCapWatts:
+                      type: integer
+                    nodeSelector:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    reason:
+                      type: string
+                    dryRun:
+                      type: boolean
+                      default: true
+                approvalRequired:
+                  type: boolean
+                  default: false
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - pending
+                    - approved
+                    - running
+                    - completed
+                    - failed
+                    - rolled_back
+                observedGeneration:
+                  type: integer
+                startTime:
+                  type: string
+                  format: date-time
+                completionTime:
+                  type: string
+                  format: date-time
+                result:
+                  type: string
+                actuationId:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: [True, False, Unknown]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

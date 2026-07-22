@@ -1,0 +1,105 @@
+x-shared-env: &shared-env
+  GPUOPT_ENV: production
+  GPUOPT_DATABASE_URL: postgresql://gpuopt:${POSTGRES_PASSWORD:-gpuopt}@db:5432/gpuopt
+  GPUOPT_DATABASE_POOL_MIN: 4
+  GPUOPT_DATABASE_POOL_MAX: 20
+  GPUOPT_ALLOW_MOCK_GPU: "true"
+  GPUOPT_LOG_LEVEL: INFO
+
+services:
+  lb:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-a
+      - api-b
+      - api-c
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api-a:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *shared-env
+    volumes:
+      - gpuopt-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/ready')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api-b:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *shared-env
+    volumes:
+      - gpuopt-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/ready')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api-c:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      <<: *shared-env
+    volumes:
+      - gpuopt-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/ready')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gpuopt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gpuopt}
+      POSTGRES_DB: gpuopt
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gpuopt"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+volumes:
+  gpuopt-data:
+  pgdata:

@@ -1,0 +1,7 @@
+clusters:
+  - name: local-mock
+    environment: sandbox
+    connector_type: mock
+    description: Local no-GPU validation using a synthetic snapshot.
+    options:
+      snapshot_path: sandbox/mock-clusters/local-kind.json

@@ -1,0 +1,220 @@
+{
+  "nodes": [
+    {
+      "node_name": "gpu-a1",
+      "state": "idle",
+      "partitions": [
+        "gpu",
+        "interactive"
+      ],
+      "cpu_count": 64,
+      "memory_mb": 512000,
+      "gpu_count": 8,
+      "gpu_model": "NVIDIA A100-SXM-80GB",
+      "features": [
+        "a100",
+        "gpu"
+      ],
+      "weight": 1
+    },
+    {
+      "node_name": "gpu-a2",
+      "state": "mix",
+      "partitions": [
+        "gpu"
+      ],
+      "cpu_count": 64,
+      "memory_mb": 512000,
+      "gpu_count": 8,
+      "gpu_model": "NVIDIA A100-SXM-80GB",
+      "features": [
+        "a100",
+        "gpu"
+      ],
+      "weight": 1
+    },
+    {
+      "node_name": "gpu-b1",
+      "state": "alloc",
+      "partitions": [
+        "gpu",
+        "highpri"
+      ],
+      "cpu_count": 128,
+      "memory_mb": 1024000,
+      "gpu_count": 8,
+      "gpu_model": "NVIDIA H100-SXM-80GB",
+      "features": [
+        "h100",
+        "gpu"
+      ],
+      "weight": 2
+    },
+    {
+      "node_name": "gpu-b2",
+      "state": "idle",
+      "partitions": [
+        "gpu",
+        "highpri"
+      ],
+      "cpu_count": 128,
+      "memory_mb": 1024000,
+      "gpu_count": 8,
+      "gpu_model": "NVIDIA H100-SXM-80GB",
+      "features": [
+        "h100",
+        "gpu"
+      ],
+      "weight": 2
+    },
+    {
+      "node_name": "cpu-1",
+      "state": "idle",
+      "partitions": [
+        "cpu",
+        "interactive"
+      ],
+      "cpu_count": 32,
+      "memory_mb": 128000,
+      "gpu_count": 0,
+      "gpu_model": "",
+      "features": [
+        "cpu"
+      ],
+      "weight": 1
+    },
+    {
+      "node_name": "cpu-2",
+      "state": "down",
+      "partitions": [
+        "cpu"
+      ],
+      "cpu_count": 32,
+      "memory_mb": 128000,
+      "gpu_count": 0,
+      "gpu_model": "",
+      "features": [
+        "cpu"
+      ],
+      "weight": 1
+    }
+  ],
+  "partitions": [
+    {
+      "name": "gpu",
+      "state": "up",
+      "nodes": [
+        "gpu-a1",
+        "gpu-a2",
+        "gpu-b1",
+        "gpu-b2"
+      ],
+      "total_cpus": 384,
+      "total_gpus": 32,
+      "default_time_minutes": 120,
+      "max_time_minutes": 4320,
+      "gpu_model": "mixed"
+    },
+    {
+      "name": "highpri",
+      "state": "up",
+      "nodes": [
+        "gpu-b1",
+        "gpu-b2"
+      ],
+      "total_cpus": 256,
+      "total_gpus": 16,
+      "default_time_minutes": 60,
+      "max_time_minutes": 1440,
+      "gpu_model": "H100"
+    },
+    {
+      "name": "cpu",
+      "state": "up",
+      "nodes": [
+        "cpu-1",
+        "cpu-2"
+      ],
+      "total_cpus": 64,
+      "total_gpus": 0,
+      "default_time_minutes": 240,
+      "max_time_minutes": 10080,
+      "gpu_model": ""
+    },
+    {
+      "name": "interactive",
+      "state": "up",
+      "nodes": [
+        "gpu-a1",
+        "cpu-1"
+      ],
+      "total_cpus": 96,
+      "total_gpus": 8,
+      "default_time_minutes": 60,
+      "max_time_minutes": 480,
+      "gpu_model": "A100"
+    }
+  ],
+  "pending_jobs": [
+    {
+      "job_id": 1002,
+      "job_name": "eval_benchmark",
+      "partition": "gpu",
+      "user": "bob",
+      "state": "PENDING",
+      "node_count": 1,
+      "gpu_count": 4,
+      "cpus": 16,
+      "memory_mb": 128000,
+      "time_limit_minutes": 120,
+      "time_used_minutes": 0,
+      "nodes": "(none)"
+    },
+    {
+      "job_id": 1001,
+      "job_name": "mod_test",
+      "partition": "gpu",
+      "user": "mock",
+      "state": "PENDING",
+      "node_count": 1,
+      "gpu_count": 0,
+      "cpus": 0,
+      "memory_mb": 0,
+      "time_limit_minutes": 0,
+      "time_used_minutes": 0,
+      "nodes": "(none)"
+    }
+  ],
+  "running_jobs": [
+    {
+      "job_id": 999,
+      "job_name": "train_resnet",
+      "partition": "gpu",
+      "user": "alice",
+      "state": "RUNNING",
+      "node_count": 1,
+      "gpu_count": 8,
+      "cpus": 32,
+      "memory_mb": 256000,
+      "time_limit_minutes": 1440,
+      "time_used_minutes": 342,
+      "nodes": "gpu-a2"
+    },
+    {
+      "job_id": 1000,
+      "job_name": "hpo_search",
+      "partition": "highpri",
+      "user": "carol",
+      "state": "RUNNING",
+      "node_count": 1,
+      "gpu_count": 8,
+      "cpus": 64,
+      "memory_mb": 512000,
+      "time_limit_minutes": 360,
+      "time_used_minutes": 45,
+      "nodes": "gpu-b1"
+    }
+  ],
+  "cancelled_jobs": [],
+  "reservations": []
+}

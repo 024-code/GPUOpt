@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-dcgm-exporter
+  namespace: gpuopt-system
+  labels:
+    app: nvidia-dcgm-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nvidia-dcgm-exporter
+  template:
+    metadata:
+      labels:
+        app: nvidia-dcgm-exporter
+    spec:
+      containers:
+        - name: exporter
+          image: python:3.12-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              mkdir -p /www && cp /config/metrics /www/metrics &&
+              python -m http.server 9400 --directory /www
+          ports:
+            - name: metrics
+              containerPort: 9400
+          volumeMounts:
+            - name: metrics
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      volumes:
+        - name: metrics
+          configMap:
+            name: mock-dcgm-metrics
