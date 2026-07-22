@@ -32,6 +32,8 @@ from .workload_agent_router import router as workload_agent_router
 from .extended_router import router as extended_router
 from .inference_api import router as inference_api_router
 from .mock_inference import router as mock_inference_router
+from .references_router import router as references_router
+from .metrics_kpi_router import router as metrics_kpi_router
 from .ratelimit import RateLimitMiddleware
 from .s24_routes import s24_router
 from .versioning import V1DeprecationMiddleware, create_v2_router, mount_v2
@@ -111,3 +113,5 @@ app.include_router(workload_agent_router)
 app.include_router(extended_router)
 app.include_router(inference_api_router)
 app.include_router(mock_inference_router)
+app.include_router(references_router)
+app.include_router(metrics_kpi_router)
