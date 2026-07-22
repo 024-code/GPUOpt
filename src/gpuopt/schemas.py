@@ -1791,3 +1791,524 @@ class JobAssignment(BaseModel):
     completed_at: str = ""
     actual_duration_minutes: float = 0.0
     actual_success: bool = False
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 1: Telemetry & State (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class EndpointTelemetry(BaseModel):
+    endpoint: str = ""
+    total_requests: int = 0
+    requests_per_second: float = 0.0
+    avg_latency_ms: float = 0.0
+    p50_latency_ms: float = 0.0
+    p99_latency_ms: float = 0.0
+    error_count: int = 0
+    error_rate: float = 0.0
+    throughput_tokens_per_sec: float = 0.0
+
+
+class ModelServiceTelemetry(BaseModel):
+    model_name: str = ""
+    model_version: str = ""
+    replicas: int = 0
+    endpoints: list[EndpointTelemetry] = Field(default_factory=list)
+    avg_gpu_utilization: float = 0.0
+    avg_memory_utilization: float = 0.0
+    cpu_usage_percent: float = 0.0
+    collected_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class FabricLinkTelemetry(BaseModel):
+    link_index: int = 0
+    link_type: str = ""  # nvlink, pcie, nvswitch
+    bandwidth_usage_percent: float = 0.0
+    tx_bytes_per_sec: float = 0.0
+    rx_bytes_per_sec: float = 0.0
+    errors: int = 0
+    crc_errors: int = 0
+    link_width: int = 0
+    link_gen: int = 0
+    is_active: bool = True
+
+
+class FabricTelemetry(BaseModel):
+    node: str = ""
+    gpu_index: int = 0
+    links: list[FabricLinkTelemetry] = Field(default_factory=list)
+    nvlink_bandwidth_utilization: float = 0.0
+    pcie_bandwidth_utilization: float = 0.0
+    total_nvlink_errors: int = 0
+
+
+class QueueTelemetry(BaseModel):
+    queue_name: str = ""
+    queue_depth: int = 0
+    pending_jobs: int = 0
+    running_jobs: int = 0
+    avg_wait_time_seconds: float = 0.0
+    max_wait_time_seconds: float = 0.0
+    p99_wait_time_seconds: float = 0.0
+    submission_rate_per_minute: float = 0.0
+    completion_rate_per_minute: float = 0.0
+    backlog_growth_rate: float = 0.0
+    priority_breaks: int = 0
+    starved_jobs: int = 0
+
+
+class JobTelemetry(BaseModel):
+    job_id: str = ""
+    job_name: str = ""
+    state: str = ""
+    priority: int = 0
+    gpu_required: int = 0
+    memory_required_gb: float = 0.0
+    wall_time_seconds: float = 0.0
+    wait_time_seconds: float = 0.0
+    gpu_utilization_avg: float = 0.0
+    memory_utilization_avg: float = 0.0
+    oom_killed: bool = False
+    exit_code: int = 0
+    preempted: bool = False
+    submitted_at: str = ""
+    started_at: str = ""
+    completed_at: str = ""
+
+
+class TelemetrySnapshot(BaseModel):
+    snapshot_id: str = Field(default_factory=lambda: str(uuid4()))
+    cluster_id: str = ""
+    collected_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    gpu_snapshot: dict[str, Any] = Field(default_factory=dict)
+    model_services: list[ModelServiceTelemetry] = Field(default_factory=list)
+    fabric: list[FabricTelemetry] = Field(default_factory=list)
+    queues: list[QueueTelemetry] = Field(default_factory=list)
+    jobs: list[JobTelemetry] = Field(default_factory=list)
+
+
+class TelemetryStreamEvent(BaseModel):
+    event_type: str  # gpu, model_service, fabric, queue, job
+    cluster_id: str = ""
+    data: dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 2: Prediction (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class QueuePressureForecast(BaseModel):
+    forecast_horizon_hours: float = 1.0
+    current_queue_depth: int = 0
+    predicted_queue_depth: float = 0.0
+    predicted_wait_time_minutes: float = 0.0
+    congestion_probability: float = 0.0
+    pressure_level: str = "low"
+    recommended_actions: list[str] = Field(default_factory=list)
+
+
+class JCTPrediction(BaseModel):
+    job_id: str = ""
+    estimated_duration_minutes: float = 0.0
+    p50_duration_minutes: float = 0.0
+    p95_duration_minutes: float = 0.0
+    p99_duration_minutes: float = 0.0
+    confidence: float = 0.0
+    factors: list[str] = Field(default_factory=list)
+
+
+class OOMRiskPrediction(BaseModel):
+    job_id: str = ""
+    gpu_index: int = 0
+    current_memory_used_gb: float = 0.0
+    peak_memory_predicted_gb: float = 0.0
+    available_memory_gb: float = 0.0
+    oom_probability: float = 0.0
+    risk_level: str = "low"
+    recommendation: str = ""
+
+
+class ThermalRiskPrediction(BaseModel):
+    node: str = ""
+    gpu_index: int = 0
+    current_temperature_c: float = 0.0
+    predicted_peak_temperature_c: float = 0.0
+    thermal_throttle_probability: float = 0.0
+    time_to_throttle_minutes: float = 0.0
+    risk_level: str = "low"
+    recommendation: str = ""
+
+
+class DemandBurstDetection(BaseModel):
+    burst_detected: bool = False
+    burst_start_time: str = ""
+    burst_magnitude: float = 0.0
+    burst_duration_seconds: float = 0.0
+    affected_metrics: list[str] = Field(default_factory=list)
+    trigger_threshold: float = 0.0
+    severity: str = "info"
+
+
+class ActionImpactForecast(BaseModel):
+    action_type: str = ""
+    description: str = ""
+    expected_gpu_utilization_change: float = 0.0
+    expected_memory_freed_gb: float = 0.0
+    expected_cost_savings: float = 0.0
+    expected_performance_impact: float = 0.0
+    risk_of_disruption: float = 0.0
+    confidence: float = 0.0
+    recommended: bool = True
+
+
+class ComprehensivePrediction(BaseModel):
+    prediction_id: str = Field(default_factory=lambda: str(uuid4()))
+    cluster_id: str = ""
+    predicted_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    queue_forecast: QueuePressureForecast | None = None
+    jct_predictions: list[JCTPrediction] = Field(default_factory=list)
+    oom_risks: list[OOMRiskPrediction] = Field(default_factory=list)
+    thermal_risks: list[ThermalRiskPrediction] = Field(default_factory=list)
+    demand_bursts: list[DemandBurstDetection] = Field(default_factory=list)
+    action_impacts: list[ActionImpactForecast] = Field(default_factory=list)
+    overall_risk_score: float = 0.0
+    summary: str = ""
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 3: Digital Twin (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class CounterfactualScenario(BaseModel):
+    scenario_id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = ""
+    description: str = ""
+    applied_actions: list[ActionImpactForecast] = Field(default_factory=list)
+    predicted_utilization: float = 0.0
+    predicted_cost_per_hour: float = 0.0
+    predicted_power_watts: float = 0.0
+    predicted_slo_compliance: float = 0.0
+    job_completion_time_impact: float = 0.0
+    risk_score: float = 0.0
+    feasibility_score: float = 0.0
+    recommendation: str = ""
+
+
+class CandidateActionScore(BaseModel):
+    action_id: str = Field(default_factory=lambda: str(uuid4()))
+    action_type: str = ""
+    target_node: str = ""
+    target_gpus: list[int] = Field(default_factory=list)
+    feasibility: bool = False
+    utility_score: float = 0.0
+    cost_score: float = 0.0
+    performance_score: float = 0.0
+    power_score: float = 0.0
+    risk_score: float = 0.0
+    overall_score: float = 0.0
+    explanation: str = ""
+
+
+class FullSimulationResult(BaseModel):
+    simulation_id: str = Field(default_factory=lambda: str(uuid4()))
+    cluster_id: str = ""
+    twin_id: str = ""
+    simulated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    scenarios: list[CounterfactualScenario] = Field(default_factory=list)
+    candidate_scores: list[CandidateActionScore] = Field(default_factory=list)
+    baseline_cost: float = 0.0
+    baseline_power: float = 0.0
+    baseline_slo_compliance: float = 0.0
+    optimized_cost: float = 0.0
+    optimized_power: float = 0.0
+    optimized_slo_compliance: float = 0.0
+    savings_percentage: float = 0.0
+    summary: str = ""
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 4: Optimization (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class ElasticWorkerConfig(BaseModel):
+    min_workers: int = 1
+    max_workers: int = 16
+    current_workers: int = 1
+    scale_up_threshold_utilization: float = 70.0
+    scale_down_threshold_utilization: float = 30.0
+    cooldown_seconds: int = 60
+    gpu_per_worker: int = 1
+    memory_per_worker_gb: float = 0.0
+
+
+class GpuTierSelection(BaseModel):
+    current_gpu_model: str = ""
+    recommended_gpu_model: str = ""
+    current_cost_per_hour: float = 0.0
+    recommended_cost_per_hour: float = 0.0
+    savings_per_hour: float = 0.0
+    performance_impact: str = "none"
+    confidence: float = 0.0
+    reasoning: str = ""
+
+
+class ConsolidationPlan(BaseModel):
+    plan_id: str = Field(default_factory=lambda: str(uuid4()))
+    cluster_id: str = ""
+    current_node_count: int = 0
+    target_node_count: int = 0
+    nodes_to_drain: list[str] = Field(default_factory=list)
+    workloads_to_move: list[str] = Field(default_factory=list)
+    estimated_cost_savings: float = 0.0
+    estimated_power_savings: float = 0.0
+    estimated_performance_impact: float = 0.0
+    risk_level: str = "low"
+    feasibility: bool = True
+    steps: list[str] = Field(default_factory=list)
+
+
+class RecommendationPriority(BaseModel):
+    recommendation_id: str = ""
+    priority_score: float = 0.0
+    urgency: str = "medium"
+    impact: str = "medium"
+    effort: str = "medium"
+    roi: float = 0.0
+    dependencies: list[str] = Field(default_factory=list)
+    suggested_order: int = 0
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 5: Training (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class QueueAwarePlacement(BaseModel):
+    job_id: str = ""
+    placement_node: str = ""
+    placement_gpus: list[int] = Field(default_factory=list)
+    queue_wait_predicted_minutes: float = 0.0
+    priority: int = 0
+    preemptible: bool = False
+    checkpoint_available: bool = False
+    estimated_duration_minutes: float = 0.0
+
+
+class ElasticScalingPlan(BaseModel):
+    job_id: str = ""
+    current_workers: int = 1
+    target_workers: int = 1
+    scaling_reason: str = ""
+    estimated_speedup: float = 1.0
+    estimated_cost_impact: float = 0.0
+    min_workers: int = 1
+    max_workers: int = 64
+
+
+class CheckpointConfig(BaseModel):
+    checkpoint_enabled: bool = True
+    checkpoint_interval_minutes: int = 30
+    checkpoint_path: str = ""
+    last_checkpoint_time: str = ""
+    checkpoint_size_gb: float = 0.0
+    restore_time_seconds: float = 0.0
+
+
+class HeterogeneousGpuAssignment(BaseModel):
+    job_id: str = ""
+    primary_gpu_model: str = ""
+    secondary_gpu_model: str = ""
+    primary_gpu_count: int = 0
+    secondary_gpu_count: int = 0
+    strategy: str = "uniform"  # uniform, pipeline, mixed
+    expected_speedup: float = 1.0
+    compatibility_score: float = 1.0
+
+
+class HPOJob(BaseModel):
+    job_id: str = ""
+    search_algorithm: str = "bayesian"
+    max_trials: int = 100
+    parallel_trials: int = 4
+    objective_metric: str = "loss"
+    best_trial_id: str = ""
+    best_score: float = 0.0
+    status: str = "pending"
+    trials: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 6: Inference (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class ReplicaRightSizing(BaseModel):
+    model_name: str = ""
+    current_replicas: int = 0
+    recommended_replicas: int = 0
+    current_gpu_per_replica: int = 0
+    recommended_gpu_per_replica: int = 0
+    current_latency_p99_ms: float = 0.0
+    target_latency_p99_ms: float = 0.0
+    current_throughput_tps: float = 0.0
+    recommended_throughput_tps: float = 0.0
+    estimated_cost_savings: float = 0.0
+
+
+class SloAwareScalingPolicy(BaseModel):
+    policy_id: str = Field(default_factory=lambda: str(uuid4()))
+    model_name: str = ""
+    min_replicas: int = 1
+    max_replicas: int = 32
+    target_latency_p99_ms: float = 100.0
+    target_throughput_per_replica: float = 100.0
+    scale_up_cooldown_seconds: int = 30
+    scale_down_cooldown_seconds: int = 60
+    current_replicas: int = 1
+    current_load_tps: float = 0.0
+
+
+class ModelInstancePlacement(BaseModel):
+    model_name: str = ""
+    model_version: str = ""
+    instance_id: str = ""
+    node: str = ""
+    gpu_indices: list[int] = Field(default_factory=list)
+    gpu_memory_allocated_gb: float = 0.0
+    status: str = "active"
+    routing_weight: float = 1.0
+
+
+class RoutingRecommendation(BaseModel):
+    model_name: str = ""
+    current_routing: str = "round_robin"
+    recommended_routing: str = "latency_based"
+    expected_latency_improvement: float = 0.0
+    expected_throughput_improvement: float = 0.0
+    reasoning: str = ""
+
+
+class MoEConfig(BaseModel):
+    num_experts: int = 8
+    top_k: int = 2
+    capacity_factor: float = 1.25
+    expert_parallelism: int = 1
+    enable_auxiliary_loss: bool = True
+    load_balancing_type: str = "auxiliary_loss"
+    recommended_routing: str = "top_k"
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 7: Governance (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class PolicyEnvelope(BaseModel):
+    policy_id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = ""
+    description: str = ""
+    domain: str = "general"
+    rules: list[dict[str, Any]] = Field(default_factory=list)
+    action: str = "block"
+    enabled: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class RollbackPlan(BaseModel):
+    plan_id: str = Field(default_factory=lambda: str(uuid4()))
+    action_id: str = ""
+    action_type: str = ""
+    reason: str = ""
+    steps: list[str] = Field(default_factory=list)
+    estimated_rollback_time_seconds: float = 0.0
+    risk_level: str = "low"
+    automated: bool = True
+    requires_approval: bool = False
+
+
+class TenantQuota(BaseModel):
+    tenant_id: str = ""
+    tenant_name: str = ""
+    max_gpus: int = 0
+    max_memory_gb: float = 0.0
+    max_priority: int = 0
+    gpus_in_use: int = 0
+    memory_in_use_gb: float = 0.0
+    priority_surcharge: float = 1.0
+    burst_allowed: bool = False
+    burst_max_gpus: int = 0
+    quota_usage_percent: float = 0.0
+
+
+class Explanation(BaseModel):
+    explanation_id: str = Field(default_factory=lambda: str(uuid4()))
+    subject_type: str = ""
+    subject_id: str = ""
+    summary: str = ""
+    factors: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: float = 1.0
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class GovernanceReport(BaseModel):
+    report_id: str = Field(default_factory=lambda: str(uuid4()))
+    report_type: str = "compliance"
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    cluster_id: str = ""
+    tenant_summaries: list[dict[str, Any]] = Field(default_factory=list)
+    policy_violations: int = 0
+    approval_metrics: dict[str, int] = Field(default_factory=dict)
+    audit_trail: list[dict[str, Any]] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Domain 8: Integration (Extended)
+# ═══════════════════════════════════════════════════════════════
+
+class PrometheusTarget(BaseModel):
+    target_id: str = ""
+    endpoint: str = ""
+    scrape_interval_seconds: int = 15
+    labels: dict[str, str] = Field(default_factory=dict)
+    healthy: bool = True
+
+
+class OpenTelemetryConfig(BaseModel):
+    service_name: str = "gpuopt"
+    endpoint: str = ""
+    protocol: str = "grpc"
+    sampling_rate: float = 0.1
+    enabled: bool = True
+
+
+class AiRuntimeInfo(BaseModel):
+    runtime_type: str = ""  # pytorch, tensorflow, jax, onnx
+    version: str = ""
+    gpu_visible: bool = False
+    cuda_available: bool = False
+    cuda_version: str = ""
+    compute_capability: str = ""
+    memory_allocated_gb: float = 0.0
+    memory_reserved_gb: float = 0.0
+    processes: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ObjectStoreConfig(BaseModel):
+    store_type: str = ""  # s3, gcs, azure_blob, minio
+    endpoint: str = ""
+    bucket: str = ""
+    region: str = ""
+    secure: bool = True
+    access_key: str = ""
+    secret_key: str = ""
+    connection_test_passed: bool = False
+
+
+class IntegrationStatus(BaseModel):
+    integration_id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = ""
+    type: str = ""
+    connected: bool = False
+    last_heartbeat: str = ""
+    metrics_count: int = 0
+    error_count: int = 0
+    latency_ms: float = 0.0
