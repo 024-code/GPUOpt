@@ -9,6 +9,7 @@ import numpy as np
 from .automl import AutoMLEngine
 from .digital_twin_sim import DigitalTwinSimulationService
 from .model_registry import ModelRegistry
+from .training_data_pipeline import TrainingDataCollector, collect_and_train
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class MLEngine:
         self.twin_sim = DigitalTwinSimulationService()
 
         self._ensemble_predictor: Any = None
+        self._data_collector: TrainingDataCollector | None = None
 
     @property
     def ensemble_predictor(self) -> Any:
@@ -31,6 +33,19 @@ class MLEngine:
             from ..predictor.ensemble_failure_predictor import EnsembleFailurePredictor
             self._ensemble_predictor = EnsembleFailurePredictor()
         return self._ensemble_predictor
+
+    @property
+    def data_collector(self) -> TrainingDataCollector:
+        if self._data_collector is None:
+            from ..gpu_monitor import GPUMonitor
+            from ..repository import ClusterRepository
+            from ..config import get_settings
+            repo = ClusterRepository(get_settings().database_path)
+            self._data_collector = TrainingDataCollector(
+                repository=repo,
+                gpu_monitor=GPUMonitor(),
+            )
+        return self._data_collector
 
     def predict_failure(self, telemetry: dict) -> dict:
         return self.ensemble_predictor.predict_failure(telemetry)
@@ -54,6 +69,26 @@ class MLEngine:
         )
 
         result["registry_entry"] = f"ensemble_failure_predictor v{self.ensemble_predictor.VERSION}"
+        return result
+
+    def train_on_cluster_data(
+        self, max_samples: int = 500, n_synthetic: int = 1000
+    ) -> dict:
+        collector = self.data_collector
+        telemetry_data, labels = collector.build_training_dataset(max_samples)
+        real_count = len(telemetry_data)
+        if real_count == 0:
+            logger.info("No real cluster data available, training on synthetic only")
+            return self.train_ensemble(
+                telemetry_history=None, labels=None, n_synthetic=n_synthetic + 1000,
+            )
+        result = self.train_ensemble(
+            telemetry_history=telemetry_data,
+            labels=labels,
+            n_synthetic=max(n_synthetic, 2000 - real_count),
+        )
+        result["real_samples"] = real_count
+        result["source"] = "cluster_management_data"
         return result
 
     def analyze_cluster(self, cluster_id: str, node_count: int = 8) -> dict:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Query
 
 from .engine import MLEngine
@@ -23,6 +25,26 @@ def train_ensemble(telemetry_data: list[dict] | None = None,
                    labels: list[int] | None = None,
                    n_synthetic: int = 2000) -> dict:
     return _engine.train_ensemble(telemetry_data, labels, n_synthetic)
+
+
+@router.post("/train-from-cluster")
+def train_from_cluster(max_samples: int = Query(default=500, ge=50, le=5000),
+                       n_synthetic: int = Query(default=1000, ge=0, le=10000)) -> dict:
+    return _engine.train_on_cluster_data(max_samples, n_synthetic)
+
+
+@router.get("/data-collection-status")
+def data_collection_status() -> dict:
+    collector = _engine.data_collector
+    store = collector.domain_store
+    status: dict[str, Any] = {"sources": {}}
+    if store:
+        status["sources"]["domain_gpu_node"] = store.gpu_node.count()
+        status["sources"]["domain_scheduler_states"] = store.scheduler_states.count()
+        status["sources"]["domain_scheduler_events"] = store.scheduler_events.count()
+        status["sources"]["domain_training_steps"] = store.training_steps.count()
+        status["sources"]["domain_inference_samples"] = store.inference_samples.count()
+    return status
 
 
 @router.post("/analyze-cluster")
