@@ -143,6 +143,7 @@ class TestCollectAndTrain:
             result = collect_and_train(
                 mock_engine, max_samples=100, n_synthetic=500,
                 repository=mock_repo,
+                include_web_datasets=False,
             )
             assert result["status"] == "training_complete"
             call_kwargs = mock_engine.train_ensemble.call_args[1]

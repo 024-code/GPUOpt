@@ -106,3 +106,25 @@ def registry_get(name: str, version: str | None = Query(default=None)) -> dict |
 @router.post("/registry/{name}/{version}/promote")
 def registry_promote(name: str, version: str, stage: str = Query(default="production")) -> dict | None:
     return _engine.registry_promote(name, version, stage)
+
+
+@router.get("/datasets")
+def list_web_datasets() -> list[dict]:
+    return _engine.list_web_datasets()
+
+
+@router.post("/datasets/download")
+def download_web_dataset(name: str = Query(description="Dataset name from /datasets"),
+                         force: bool = False) -> dict:
+    return _engine.download_web_dataset(name, force=force)
+
+
+@router.post("/datasets/train")
+def train_on_web_datasets(
+    sources: str | None = Query(default=None, description="Comma-separated dataset names"),
+    max_samples: int = Query(default=5000, ge=100, le=50000),
+    blend_with_cluster: bool = Query(default=True),
+    synthetic_factor: float = Query(default=0.5, ge=0.0, le=2.0),
+) -> dict:
+    source_list = [s.strip() for s in sources.split(",")] if sources else None
+    return _engine.train_on_web_data(source_list, max_samples, blend_with_cluster, synthetic_factor)

@@ -255,19 +255,35 @@ def collect_and_train(
     n_synthetic: int = 1000,
     repository: ClusterRepository | None = None,
     gpu_monitor: GPUMonitor | None = None,
+    include_web_datasets: bool = True,
+    web_sources: list[str] | None = None,
+    max_web_samples: int = 3000,
 ) -> dict:
     collector = TrainingDataCollector(
         repository=repository,
         gpu_monitor=gpu_monitor,
     )
     telemetry_data, labels = collector.build_training_dataset(max_samples)
+    if include_web_datasets:
+        try:
+            from .web_datasets import WebDatasetIngestion
+            ingestion = WebDatasetIngestion()
+            web_data, web_labels = ingestion.get_training_data(
+                sources=web_sources, max_samples=max_web_samples,
+            )
+            if web_data:
+                telemetry_data.extend(web_data)
+                labels.extend(web_labels)
+                logger.info("Augmented with %d web dataset samples", len(web_data))
+        except Exception as exc:
+            logger.warning("Web dataset augmentation skipped: %s", exc)
     if telemetry_data:
         logger.info(
-            "Training with %d real + %d synthetic samples",
+            "Training with %d total + %d synthetic samples",
             len(telemetry_data), n_synthetic,
         )
     else:
-        logger.info("No real data available, using %d synthetic samples", n_synthetic)
+        logger.info("No data available, using %d synthetic samples", n_synthetic)
     return engine.train_ensemble(
         telemetry_history=telemetry_data if telemetry_data else None,
         labels=labels if labels else None,

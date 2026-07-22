@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from .config import get_settings
+from .ml.web_datasets import WebDatasetIngestion
 from .repository import ClusterRepository
 from .schemas import ClusterCreate
 from .services import EnvironmentCheckService
@@ -45,6 +46,37 @@ def command_check_all(args: argparse.Namespace) -> int:
     return 1 if any(report.overall_status.value == "fail" for report in reports) else 0
 
 
+def command_dataset_list(args: argparse.Namespace) -> int:
+    ingestion = WebDatasetIngestion()
+    datasets = ingestion.list_datasets()
+    print(f"{'Name':35} {'Cached':8} {'Telemetry':10} {'Samples':8}")
+    print("-" * 65)
+    for ds in datasets:
+        cached = "yes" if ds.get("cached") else "no"
+        samples = ds.get("size_bytes", "—")
+        print(f"{ds.get('name', ds.get('local_file', '?')):35} {cached:8} {str(ds.get('telemetry', '—')):10} {samples}")
+    if not datasets:
+        print("No datasets found.")
+    return 0
+
+
+def command_dataset_download(args: argparse.Namespace) -> int:
+    ingestion = WebDatasetIngestion()
+    if args.name == "all":
+        results = ingestion.ingest_all_available()
+        for name, info in results.items():
+            if name.startswith("_"):
+                continue
+            status = "OK" if info.get("samples", 0) > 0 else "FAIL"
+            print(f"  {status:6} {name:35} {info.get('samples', 0)} samples")
+    else:
+        path = ingestion.download_dataset(args.name, force=args.force)
+        data = ingestion.ingest(args.name)
+        print(f"Downloaded {args.name} to {path}")
+        print(f"  Samples: {len(data)}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gpuopt")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -57,6 +89,15 @@ def build_parser() -> argparse.ArgumentParser:
     check_all.add_argument("--file", help="Optionally upsert clusters before checking")
     check_all.add_argument("--json", action="store_true")
     check_all.set_defaults(func=command_check_all)
+
+    dataset = subparsers.add_parser("dataset", help="Manage web datasets for training")
+    dataset_sub = dataset.add_subparsers(dest="subcommand", required=True)
+    ds_list = dataset_sub.add_parser("list", help="List available datasets")
+    ds_list.set_defaults(func=command_dataset_list)
+    ds_dl = dataset_sub.add_parser("download", help="Download a dataset")
+    ds_dl.add_argument("name", help="Dataset name or 'all'")
+    ds_dl.add_argument("--force", action="store_true", help="Force re-download")
+    ds_dl.set_defaults(func=command_dataset_download)
     return parser
 
 
