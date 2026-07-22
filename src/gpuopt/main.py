@@ -43,6 +43,7 @@ from .deployment_workflow_router import router as deployment_workflow_router
 from .gpu_usage_inventory_router import router as gpu_usage_inventory_router
 from .optimization_analysis_router import router as optimization_analysis_router
 from .environment_checks_router import router as environment_checks_router
+from .ml.router import router as ml_router
 from .ratelimit import RateLimitMiddleware
 from .s24_routes import s24_router
 from .versioning import V1DeprecationMiddleware, create_v2_router, mount_v2
@@ -130,6 +131,7 @@ app.include_router(gpu_usage_inventory_router)
 app.include_router(optimization_analysis_router)
 app.include_router(environment_checks_router)
 app.include_router(rtx_router)
+app.include_router(ml_router)
 
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
 if frontend_dir.is_dir():
