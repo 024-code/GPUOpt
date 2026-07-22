@@ -2375,3 +2375,170 @@ class TelemetrySourceStatus(BaseModel):
     fallback_active: bool = False
     contract_valid: bool = True
     issues: list[str] = Field(default_factory=list)
+
+
+# ═══════════════════════════════════════════════════════════════
+# R02: Digital Twin Calibration & Confidence
+# ═══════════════════════════════════════════════════════════════
+
+class WorkloadFamilyProfile(BaseModel):
+    family: str = ""
+    description: str = ""
+    typical_gpu_count: int = 1
+    typical_memory_gb: float = 16.0
+    typical_duration_minutes: float = 120.0
+    parallelism_efficiency: float = 0.7
+    checkpoint_compatible: bool = True
+    preemptible: bool = True
+    calibration_bias: float = 0.0  # historical sim vs actual offset
+    calibration_variance: float = 0.1
+    sample_count: int = 0
+
+
+class TwinConfidenceLimits(BaseModel):
+    twin_id: str = ""
+    prediction_interval_percent: float = 95.0
+    lower_bound: float = 0.0
+    upper_bound: float = 1.0
+    confidence_score: float = 1.0
+    calibration_version: str = ""
+    calibrated_at: str = ""
+
+
+class TwinFallbackMode(BaseModel):
+    twin_id: str = ""
+    mode: str = "full"  # full, recommendation_only, disabled
+    reason: str = ""
+    activated_at: str = ""
+    confidence_threshold: float = 0.5
+
+
+# ═══════════════════════════════════════════════════════════════
+# R03: Canary Deployment
+# ═══════════════════════════════════════════════════════════════
+
+class CanaryStep(BaseModel):
+    name: str = ""
+    traffic_percent: float = 0.0
+    duration_minutes: float = 0.0
+    success_criteria: list[str] = Field(default_factory=list)
+    status: str = "pending"
+
+
+class CanaryDeployment(BaseModel):
+    deployment_id: str = Field(default_factory=lambda: str(uuid4()))
+    action_id: str = ""
+    action_type: str = ""
+    steps: list[CanaryStep] = Field(default_factory=list)
+    current_step: int = 0
+    status: str = "pending"
+    rollback_triggered: bool = False
+    started_at: str = ""
+    completed_at: str = ""
+
+
+# ═══════════════════════════════════════════════════════════════
+# R04: Workload Capability Classification
+# ═══════════════════════════════════════════════════════════════
+
+class WorkloadCapability(BaseModel):
+    workload_type: str = ""
+    supports_checkpoint: bool = False
+    supports_preemption: bool = False
+    supports_elastic: bool = False
+    supports_migration: bool = False
+    destructive_actions_allowed: bool = False
+    recovery_time_seconds: float = 0.0
+    classification: str = "unknown"
+
+
+class WorkloadClassResult(BaseModel):
+    workload_id: str = ""
+    name: str = ""
+    framework: str = ""
+    capability: WorkloadCapability = Field(default_factory=WorkloadCapability)
+    recommended_actions: list[str] = Field(default_factory=list)
+    unsafe_actions: list[str] = Field(default_factory=list)
+
+
+# ═══════════════════════════════════════════════════════════════
+# R07: Hierarchical Optimization
+# ═══════════════════════════════════════════════════════════════
+
+class OptimizationTier(BaseModel):
+    tier: str = "global"
+    scope: str = ""
+    max_candidates: int = 100
+    prune_threshold: float = 0.3
+    cache_ttl_seconds: float = 60.0
+
+
+class CachedOptimizationResult(BaseModel):
+    cache_key: str = ""
+    result: dict[str, Any] = Field(default_factory=dict)
+    computed_at: str = ""
+    ttl_seconds: float = 60.0
+    hit_count: int = 0
+
+
+# ═══════════════════════════════════════════════════════════════
+# R09: Security Threat Model
+# ═══════════════════════════════════════════════════════════════
+
+class ThreatModelEntry(BaseModel):
+    threat_id: str = ""
+    category: str = ""
+    description: str = ""
+    severity: str = "medium"
+    likelihood: str = "medium"
+    mitigation: str = ""
+    status: str = "open"
+
+
+class SecurityChampionCheck(BaseModel):
+    check_id: str = ""
+    name: str = ""
+    category: str = ""
+    passed: bool = False
+    details: str = ""
+
+
+# ═══════════════════════════════════════════════════════════════
+# R13: Dispute Workflow
+# ═══════════════════════════════════════════════════════════════
+
+class DisputeRecord(BaseModel):
+    dispute_id: str = Field(default_factory=lambda: str(uuid4()))
+    tenant_id: str = ""
+    resource_type: str = ""
+    claimed_usage: float = 0.0
+    actual_usage: float = 0.0
+    reason: str = ""
+    status: str = "open"
+    resolution: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    resolved_at: str = ""
+
+
+# ═══════════════════════════════════════════════════════════════
+# R14: Contract Tests & Version Policy
+# ═══════════════════════════════════════════════════════════════
+
+class ContractTestCase(BaseModel):
+    test_id: str = Field(default_factory=lambda: str(uuid4()))
+    adapter_type: str = ""
+    version: str = ""
+    input_example: dict[str, Any] = Field(default_factory=dict)
+    expected_output: dict[str, Any] = Field(default_factory=dict)
+    passed: bool = False
+    last_run: str = ""
+
+
+class SupportedVersion(BaseModel):
+    adapter_type: str = ""
+    min_version: str = ""
+    max_version: str = ""
+    current_version: str = ""
+    deprecation_date: str = ""
+    sunset_date: str = ""
+    migration_guide: str = ""
