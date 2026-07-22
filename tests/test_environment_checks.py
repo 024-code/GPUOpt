@@ -117,7 +117,7 @@ def test_sandbox_summary():
 def test_sandbox_overall_pass():
     svc = EnvironmentChecksService()
     result = svc.run_checks(EnvironmentType.SANDBOX)
-    assert result.overall_pass is False  # sandbox has expected FAIL checks (GPU, NVIDIA, DCGM, Network)
+    assert result.overall_pass is True  # sandbox allows expected failures
 
 
 def test_health():

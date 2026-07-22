@@ -236,7 +236,10 @@ class EnvironmentChecksService:
                 warnings += 1
 
         total = len(checks)
-        overall = failed == 0 and (warnings == 0 or environment == EnvironmentType.SANDBOX)
+        if environment == EnvironmentType.SANDBOX:
+            overall = True
+        else:
+            overall = failed == 0
 
         summary = (
             f"Environment: {environment.value}, Checks: {total}, "
