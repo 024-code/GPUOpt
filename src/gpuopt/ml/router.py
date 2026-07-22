@@ -128,3 +128,80 @@ def train_on_web_datasets(
 ) -> dict:
     source_list = [s.strip() for s in sources.split(",")] if sources else None
     return _engine.train_on_web_data(source_list, max_samples, blend_with_cluster, synthetic_factor)
+
+
+@router.post("/simulate-enhanced")
+def simulate_enhanced(
+    gpu_model: str = Query(default="NVIDIA H100-SXM-80GB"),
+    num_gpus: int = Query(default=8, ge=1, le=256),
+    num_nodes: int = Query(default=1, ge=1, le=32),
+    steps: int = Query(default=100, ge=10, le=1000),
+    workload_type: str = Query(default="llm_training"),
+) -> dict:
+    return _engine.enhanced_simulate(gpu_model, num_gpus, num_nodes, steps, workload_type)
+
+
+@router.post("/simulate-enhanced-failure")
+def simulate_enhanced_failure(
+    scenario: str = Query(default="thermal_runaway"),
+    gpu_model: str = Query(default="NVIDIA H100-SXM-80GB"),
+    num_gpus: int = Query(default=8, ge=1, le=64),
+) -> dict:
+    return _engine.enhanced_simulate_failure(scenario, gpu_model, num_gpus)
+
+
+@router.post("/schedule")
+def schedule_job(
+    name: str = Query(default="", max_length=200),
+    required_gpus: int = Query(default=1, ge=1, le=256),
+    required_memory_gib: float = Query(default=8.0, ge=0.1, le=1024),
+    estimated_runtime_hours: float = Query(default=1.0, ge=0.1, le=8760),
+    priority: int = Query(default=5, ge=1, le=10),
+    workload_type: str = Query(default="llm_inference"),
+    policy: str | None = Query(default=None, description="round_robin, least_loaded, risk_aware, thermal_aware, power_efficient, hybrid"),
+) -> dict:
+    return _engine.schedule_job(name, required_gpus, required_memory_gib,
+                                 estimated_runtime_hours, priority, workload_type, policy)
+
+
+@router.get("/cluster-health")
+def cluster_health() -> dict:
+    return _engine.get_cluster_health()
+
+
+@router.post("/closed-loop-train")
+def closed_loop_train(
+    cycles: int = Query(default=3, ge=1, le=20),
+    steps_per_episode: int = Query(default=80, ge=10, le=500),
+    retrain_every: int = Query(default=1, ge=1, le=10),
+    gpu_model: str = Query(default="NVIDIA H100-SXM-80GB"),
+    num_nodes: int = Query(default=1, ge=1, le=8),
+) -> list[dict]:
+    return _engine.closed_loop_train(cycles, steps_per_episode, retrain_every, gpu_model, num_nodes)
+
+
+@router.post("/compare-policies")
+def compare_policies(
+    steps: int = Query(default=60, ge=10, le=300),
+    num_nodes: int = Query(default=1, ge=1, le=8),
+) -> list[dict]:
+    return _engine.compare_policies(steps, num_nodes)
+
+
+@router.post("/optimize-policies")
+def optimize_policies(
+    iterations: int = Query(default=10, ge=5, le=100),
+    steps_per_eval: int = Query(default=50, ge=10, le=200),
+    num_nodes: int = Query(default=1, ge=1, le=8),
+) -> dict:
+    return _engine.optimize_policies(iterations, steps_per_eval, num_nodes)
+
+
+@router.post("/power-cap-analysis")
+def power_cap_analysis() -> list[dict]:
+    return _engine.power_cap_analysis()
+
+
+@router.get("/drain-recommendations")
+def drain_recommendations() -> list[dict]:
+    return _engine.drain_recommendations()

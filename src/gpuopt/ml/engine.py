@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from .automl import AutoMLEngine
+from .closed_loop import ClosedLoopTrainer
+from .cluster_algorithm import ClusterManagementAlgorithm
 from .digital_twin_sim import DigitalTwinSimulationService
 from .model_registry import ModelRegistry
+from .node_simulation import ClusterTopology, EnhancedSimulationEngine
 from .training_data_pipeline import TrainingDataCollector, collect_and_train
 from .web_datasets import WebDatasetIngestion
 
@@ -191,6 +195,143 @@ class MLEngine:
         result["source"] = "web_datasets"
         return result
 
+    @property
+    def cluster_manager(self) -> ClusterManagementAlgorithm:
+        return ClusterManagementAlgorithm(predictor=self.ensemble_predictor)
+
+    @property
+    def closed_loop_trainer(self) -> ClosedLoopTrainer:
+        return ClosedLoopTrainer(
+            engine=self.ensemble_predictor,
+            management_algorithm=self.cluster_manager,
+        )
+
+    def enhanced_simulate(
+        self,
+        gpu_model: str = "NVIDIA H100-SXM-80GB",
+        num_gpus: int = 8,
+        num_nodes: int = 1,
+        steps: int = 100,
+        workload_type: str = "llm_training",
+    ) -> dict:
+        profile_map = {
+            "llm_inference": {"gpu_util_target": 45.0, "memory_target_pct": 40.0, "tensor_intensity": 0.7, "mem_intensity": 0.5},
+            "llm_training": {"gpu_util_target": 92.0, "memory_target_pct": 90.0, "tensor_intensity": 0.95, "mem_intensity": 0.8},
+            "cnn_training": {"gpu_util_target": 88.0, "memory_target_pct": 50.0, "tensor_intensity": 0.85, "mem_intensity": 0.4},
+            "batch_inference": {"gpu_util_target": 75.0, "memory_target_pct": 30.0, "tensor_intensity": 0.5, "mem_intensity": 0.3},
+            "data_processing": {"gpu_util_target": 35.0, "memory_target_pct": 20.0, "tensor_intensity": 0.2, "mem_intensity": 0.7},
+        }
+        profile = profile_map.get(workload_type, profile_map["llm_inference"])
+        engine = EnhancedSimulationEngine()
+        if "H100" in gpu_model or "dgx" in gpu_model.lower():
+            topo = ClusterTopology().build_dgx_h100(num_nodes)
+        else:
+            topo = ClusterTopology().build_rtx_cluster(num_gpus)
+        result = engine.simulate(topo, steps=steps, profile=profile)
+        return result
+
+    def enhanced_simulate_failure(
+        self,
+        scenario: str = "thermal_runaway",
+        gpu_model: str = "NVIDIA H100-SXM-80GB",
+        num_gpus: int = 8,
+    ) -> dict:
+        engine = EnhancedSimulationEngine()
+        if "H100" in gpu_model:
+            topo = ClusterTopology().build_dgx_h100(1)
+        else:
+            topo = ClusterTopology().build_rtx_cluster(num_gpus)
+        return engine.simulate_failure_scenario(scenario, topo)
+
+    def schedule_job(
+        self,
+        name: str = "",
+        required_gpus: int = 1,
+        required_memory_gib: float = 8.0,
+        estimated_runtime_hours: float = 1.0,
+        priority: int = 5,
+        workload_type: str = "llm_inference",
+        policy: str | None = None,
+    ) -> dict:
+        from .cluster_algorithm import JobSpec, SchedulingPolicy
+        from .node_simulation import ClusterTopology
+        job = JobSpec(
+            job_id=f"job-{uuid.uuid4().hex[:8]}",
+            name=name, required_gpus=required_gpus,
+            required_memory_gib=required_memory_gib,
+            estimated_runtime_hours=estimated_runtime_hours,
+            priority=priority, workload_type=workload_type,
+        )
+        topo = ClusterTopology().build_dgx_h100(2)
+        mgr = self.cluster_manager
+        if policy:
+            mgr.scheduling_policy = SchedulingPolicy(policy)
+        decision = mgr.schedule_job(job, topo)
+        return {
+            "job_id": decision.job_id,
+            "assigned_gpus": [f"{n}:GPU{g}" for n, g in decision.assigned_gpus],
+            "policy": decision.policy.value,
+            "predicted_failure_risk": round(decision.predicted_failure_risk, 4),
+            "estimated_power_watts": round(decision.estimated_power_watts, 1),
+            "thermal_headroom_c": round(decision.thermal_headroom_c, 1),
+            "score": round(decision.score, 4),
+            "rationale": decision.rationale,
+        }
+
+    def get_cluster_health(self) -> dict:
+        topo = ClusterTopology().build_dgx_h100(2)
+        return self.cluster_manager.get_cluster_health_report(topo)
+
+    def closed_loop_train(
+        self,
+        cycles: int = 3,
+        steps_per_episode: int = 80,
+        retrain_every: int = 1,
+        gpu_model: str = "NVIDIA H100-SXM-80GB",
+        num_nodes: int = 1,
+    ) -> list[dict]:
+        topo = ClusterTopology().build_dgx_h100(num_nodes)
+        trainer = self.closed_loop_trainer
+        return trainer.iterative_improvement_cycle(topo, cycles, steps_per_episode, retrain_every)
+
+    def compare_policies(
+        self,
+        steps: int = 60,
+        num_nodes: int = 1,
+    ) -> list[dict]:
+        topo = ClusterTopology().build_dgx_h100(num_nodes)
+        trainer = self.closed_loop_trainer
+        return trainer.compare_policies(topo, steps=steps)
+
+    def optimize_policies(
+        self,
+        iterations: int = 10,
+        steps_per_eval: int = 50,
+        num_nodes: int = 1,
+    ) -> dict:
+        topo = ClusterTopology().build_dgx_h100(num_nodes)
+        trainer = self.closed_loop_trainer
+        return trainer.policy_optimization_loop(topo, iterations, steps_per_eval)
+
+    def power_cap_analysis(self) -> list[dict]:
+        topo = ClusterTopology().build_dgx_h100(1)
+        caps = self.cluster_manager.compute_power_caps(topo)
+        return [
+            {"gpu": str(c.gpu_key), "from_watts": c.current_power_watts,
+             "to_watts": c.new_cap_watts, "temp_before": c.temp_before,
+             "temp_after_estimate": c.temp_after_estimate, "reason": c.reason}
+            for c in caps
+        ]
+
+    def drain_recommendations(self) -> list[dict]:
+        topo = ClusterTopology().build_dgx_h100(1)
+        drains = self.cluster_manager.recommend_drain(topo)
+        return [
+            {"gpu": str(d.gpu_key), "risk_score": d.risk_score,
+             "urgency": d.urgency, "action": d.suggested_action, "reason": d.reason}
+            for d in drains
+        ]
+
     def health(self) -> dict:
         return {
             "status": "healthy",
@@ -199,4 +340,10 @@ class MLEngine:
             "registry": self.registry.health(),
             "automl": self.automl.health(),
             "twin_sim": self.twin_sim.health(),
+            "cluster_algorithm": {
+                "scheduling_policies": ["round_robin", "least_loaded", "risk_aware", "thermal_aware", "power_efficient", "hybrid"],
+                "power_cap_modes": ["off", "temperature_guided", "risk_guided", "predictive"],
+                "failure_scenarios": ["thermal_runaway", "memory_leak", "xid_storm", "power_surge", "fan_failure"],
+            },
+            "closed_loop": {"available": True},
         }
