@@ -1718,3 +1718,76 @@ class ScheduledReport(BaseModel):
     next_send_at: datetime | None = None
     enabled: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ── Workload Agent Schemas ─────────────────────────────────────
+
+
+class SystemInfo(BaseModel):
+    detected_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    hostname: str = ""
+    cpu_model: str = ""
+    cpu_cores: int = 0
+    cpu_threads: int = 0
+    cpu_usage_percent: float = 0.0
+    ram_total_gb: float = 0.0
+    ram_available_gb: float = 0.0
+    ram_used_gb: float = 0.0
+    ram_usage_percent: float = 0.0
+    gpu_count: int = 0
+    gpus: list[dict[str, Any]] = Field(default_factory=list)
+    total_gpu_memory_gb: float = 0.0
+    used_gpu_memory_gb: float = 0.0
+    free_gpu_memory_gb: float = 0.0
+    cluster_id: str = ""
+
+
+class WorkloadInput(BaseModel):
+    name: str
+    gpu_required: int = 1
+    memory_required_gb: float = 0.0
+    cpu_required_cores: float = 0.0
+    priority: str = "normal"
+    max_duration_minutes: float = 120.0
+    framework: str = "pytorch"
+    precision: str = "fp32"
+    dataset_size_gb: float = 0.0
+    model_size_gb: float = 0.0
+    cluster_id: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MLPredictionResult(BaseModel):
+    success_probability: float = 0.0
+    predicted_duration_minutes: float = 0.0
+    predicted_memory_peak_gb: float = 0.0
+    predicted_gpu_utilization: float = 0.0
+    risk_factors: list[str] = Field(default_factory=list)
+    recommendation: str = ""
+
+
+class DigitalTwinSimulation(BaseModel):
+    simulation_id: str = Field(default_factory=lambda: str(uuid4()))
+    workload: WorkloadInput
+    system: SystemInfo | None = None
+    prediction: MLPredictionResult | None = None
+    feasible: bool = False
+    rejection_reason: str = ""
+    assigned_gpu_indices: list[int] = Field(default_factory=list)
+    assigned_memory_gb: float = 0.0
+    estimated_cost: float = 0.0
+    simulated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class JobAssignment(BaseModel):
+    assignment_id: str = Field(default_factory=lambda: str(uuid4()))
+    workload: WorkloadInput
+    simulation: DigitalTwinSimulation
+    assigned_gpu_indices: list[int] = Field(default_factory=list)
+    assigned_memory_gb: float = 0.0
+    assigned_node: str = ""
+    status: str = "assigned"
+    started_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    completed_at: str = ""
+    actual_duration_minutes: float = 0.0
+    actual_success: bool = False
