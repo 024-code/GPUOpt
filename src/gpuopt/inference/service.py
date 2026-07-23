@@ -491,6 +491,8 @@ class InferenceService:
                 "falcon": {"size": 7, "tokens": 2048},
                 "qwen": {"size": 7, "tokens": 32768},
                 "gemma": {"size": 7, "tokens": 8192},
+                "deepseek-r1": {"size": 236, "tokens": 65536},
+                "deepseek-v2": {"size": 236, "tokens": 65536},
                 "deepseek": {"size": 7, "tokens": 4096},
                 "gpt": {"size": 175, "tokens": 4096},
                 "bert": {"size": 0.5, "tokens": 512},
