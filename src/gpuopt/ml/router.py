@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from .engine import MLEngine
 
 router = APIRouter(prefix="/api/v1/ml", tags=["ml_engine"])
+
 _engine = MLEngine()
 
 
@@ -243,3 +244,34 @@ def schedule_job_with_capability(
         estimated_runtime_hours, priority, workload_type,
         policy, required_capabilities,
     )
+
+
+@router.get("/cpu-catalog")
+def list_cpu_catalog(
+    vendor: str | None = Query(default=None),
+    socket: str | None = Query(default=None),
+    min_cores: int | None = Query(default=None, ge=1),
+    has_igpu: bool | None = Query(default=None),
+    min_igpu_tflops: float | None = Query(default=None, ge=0),
+) -> list[dict]:
+    return _engine.list_cpu_catalog(vendor, socket, min_cores, has_igpu, min_igpu_tflops)
+
+
+@router.get("/cpu-catalog/stats")
+def cpu_catalog_stats() -> dict:
+    return _engine.get_cpu_catalog_stats()
+
+
+@router.get("/cpu-catalog/lookup")
+def lookup_cpu(name: str = Query(description="CPU model name to look up")) -> dict | None:
+    return _engine.lookup_cpu(name)
+
+
+@router.get("/hardware-detect")
+def hardware_detect() -> dict:
+    return _engine.detect_hardware()
+
+
+@router.get("/memory-detect")
+def memory_detect() -> dict:
+    return _engine.detect_memory()

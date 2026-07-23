@@ -173,8 +173,12 @@ class SimNode:
     gpus: list[SimGpu]
     cpu_cores: int = 64
     cpu_util_pct: float = 0.0
+    cpu_vendor: str = ""
     system_memory_gib: float = 512.0
     system_memory_used_gib: float = 0.0
+    memory_type: str = ""
+    memory_bandwidth_gbps: float = 0.0
+    ecc_capable: bool = False
     cooling: CoolingSystem = field(default_factory=CoolingSystem)
     nic_bandwidth_gbps: float = 400.0
     nic_util_pct: float = 0.0

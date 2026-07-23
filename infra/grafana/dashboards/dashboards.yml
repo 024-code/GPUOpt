@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: GPUOpt
+    orgId: 1
+    folder: GPUOpt
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/definitions

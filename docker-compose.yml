@@ -100,6 +100,23 @@ services:
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
 
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
+
 volumes:
   gpuopt-data:
   pgdata:
+  grafana-data:

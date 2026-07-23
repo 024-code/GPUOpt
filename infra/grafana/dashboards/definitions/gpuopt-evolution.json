@@ -1,0 +1,28 @@
+{
+  "title": "GPUOpt Evolution",
+  "uid": "gpuopt-evo",
+  "tags": ["gpuopt"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "title": "Policy Evolutions",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 3},
+      "targets": [{"expr": "gpuopt_policy_evolutions_total", "legendFormat": "Total"}]
+    },
+    {
+      "title": "Evolutions Over Time",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 3, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(gpuopt_policy_evolutions_total[5m])", "legendFormat": "Evolutions/sec"}]
+    },
+    {
+      "title": "Predictions",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 11, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(gpuopt_predictions_total[5m])", "legendFormat": "{{result}}"}]
+    }
+  ]
+}

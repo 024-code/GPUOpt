@@ -20,3 +20,6 @@ CACHEDIR.TAG
 *.sarif
 *.sbom.json
 .trivycache/
+.DS_Store
+.claude/
+.opencode/

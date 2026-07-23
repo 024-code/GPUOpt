@@ -31,6 +31,8 @@ class SchedulingPolicy(Enum):
     THERMAL_AWARE = "thermal_aware"
     POWER_EFFICIENT = "power_efficient"
     HYBRID = "hybrid"
+    MEMORY_BANDWIDTH = "memory_bandwidth"
+    ECC_REQUIRED = "ecc_required"
 
 
 class PowerCapMode(Enum):
@@ -54,6 +56,11 @@ class GpuMetrics:
     fan_speed_pct: float
     clock_mhz: float
     wear_factor: float
+    memory_bandwidth_gbps: float = 0.0
+    ecc_capable: bool = False
+    node_cpu_cores: int = 0
+    node_cpu_vendor: str = ""
+    node_memory_type: str = ""
 
     def to_telemetry(self) -> dict:
         return {
@@ -77,6 +84,18 @@ class GpuMetrics:
 
 
 @dataclass
+class NodeHardware:
+    node_id: str = ""
+    cpu_cores: int = 0
+    cpu_arch: str = ""
+    cpu_vendor: str = ""
+    system_memory_gb: float = 0.0
+    memory_type: str = ""
+    memory_bandwidth_gbps: float = 0.0
+    ecc_capable: bool = False
+
+
+@dataclass
 class JobSpec:
     job_id: str = ""
     name: str = ""
@@ -87,6 +106,11 @@ class JobSpec:
     workload_type: str = "llm_inference"
     tensor_intensity: float = 0.6
     mem_intensity: float = 0.5
+    require_ecc: bool = False
+    min_memory_bandwidth_gbps: float = 0.0
+    preferred_memory_type: str = ""
+    min_cpu_cores: int = 0
+    cpu_vendor_preference: str = ""
 
 
 @dataclass
@@ -165,6 +189,17 @@ class ClusterManagementAlgorithm:
                 self._predictor = None
         return self._predictor
 
+    def _get_node_hardware(self, node: Any) -> NodeHardware:
+        return NodeHardware(
+            node_id=node.node_id,
+            cpu_cores=getattr(node, "cpu_cores", 0),
+            cpu_vendor=getattr(node, "cpu_vendor", ""),
+            system_memory_gb=getattr(node, "system_memory_gib", 0),
+            memory_type=getattr(node, "memory_type", ""),
+            memory_bandwidth_gbps=getattr(node, "memory_bandwidth_gbps", 0.0),
+            ecc_capable=getattr(node, "ecc_capable", False),
+        )
+
     def get_gpu_metrics(
         self, topology: Any,
     ) -> list[GpuMetrics]:
@@ -172,6 +207,7 @@ class ClusterManagementAlgorithm:
         for node in topology.nodes:
             if not node.is_on:
                 continue
+            nh = self._get_node_hardware(node)
             for gpu in node.gpus:
                 if gpu.is_faulted:
                     continue
@@ -187,6 +223,11 @@ class ClusterManagementAlgorithm:
                     fan_speed_pct=gpu.fan_speed_pct,
                     clock_mhz=gpu.clock_mhz,
                     wear_factor=gpu.degradation.wear_factor if hasattr(gpu, "degradation") else 0.0,
+                    memory_bandwidth_gbps=nh.memory_bandwidth_gbps,
+                    ecc_capable=nh.ecc_capable,
+                    node_cpu_cores=nh.cpu_cores,
+                    node_cpu_vendor=nh.cpu_vendor,
+                    node_memory_type=nh.memory_type,
                 ))
         return metrics
 
@@ -210,6 +251,19 @@ class ClusterManagementAlgorithm:
         risk += max(0, metric.power_watts / metric.power_cap_watts - 0.8) * 0.10
         return min(1.0, risk)
 
+    def _check_node_capability(self, metric: GpuMetrics, job: JobSpec) -> tuple[bool, str]:
+        if job.require_ecc and not metric.ecc_capable:
+            return False, f"node {metric.node_id} lacks ECC memory"
+        if job.min_memory_bandwidth_gbps > 0 and metric.memory_bandwidth_gbps < job.min_memory_bandwidth_gbps:
+            return False, f"node {metric.node_id} bandwidth {metric.memory_bandwidth_gbps:.0f} < {job.min_memory_bandwidth_gbps:.0f} GB/s"
+        if job.preferred_memory_type and metric.node_memory_type and job.preferred_memory_type.lower() != metric.node_memory_type.lower():
+            return False, f"node {metric.node_id} memory type {metric.node_memory_type} != {job.preferred_memory_type}"
+        if job.min_cpu_cores > 0 and metric.node_cpu_cores < job.min_cpu_cores:
+            return False, f"node {metric.node_id} has {metric.node_cpu_cores} cores < {job.min_cpu_cores}"
+        if job.cpu_vendor_preference and metric.node_cpu_vendor and job.cpu_vendor_preference.lower() != metric.node_cpu_vendor.lower():
+            return False, f"node {metric.node_id} cpu vendor {metric.node_cpu_vendor} != {job.cpu_vendor_preference}"
+        return True, ""
+
     def _compute_gpu_score(
         self, metric: GpuMetrics, job: JobSpec, policy: SchedulingPolicy,
     ) -> dict:
@@ -232,11 +286,19 @@ class ClusterManagementAlgorithm:
         if policy == SchedulingPolicy.POWER_EFFICIENT or policy == SchedulingPolicy.HYBRID:
             scores["power"] = min(1.0, power_efficiency * 0.5)
 
+        if policy == SchedulingPolicy.MEMORY_BANDWIDTH or policy == SchedulingPolicy.HYBRID:
+            max_bw = max(metric.memory_bandwidth_gbps, 1)
+            scores["bandwidth"] = min(1.0, metric.memory_bandwidth_gbps / max_bw)
+
+        if policy == SchedulingPolicy.ECC_REQUIRED or policy == SchedulingPolicy.HYBRID:
+            scores["ecc"] = 1.0 if metric.ecc_capable else 0.0
+
         scores["memory"] = mem_free_pct
         scores["availability"] = util_free
 
-        weights = {"safety": 0.30, "thermal": 0.20, "load": 0.15, "memory": 0.15, "availability": 0.10, "power": 0.10}
-        final_score = sum(scores.get(k, 0) * weights.get(k, 0) for k in weights)
+        weights = {"safety": 0.30, "thermal": 0.20, "load": 0.15, "memory": 0.15, "availability": 0.10, "power": 0.10,
+                    "bandwidth": 0.10, "ecc": 0.10}
+        final_score = sum(scores.get(k, 0) * weights.get(k, 0) for k in weights if k in scores)
         final_score *= (1.0 - wear_penalty * 0.5)
 
         return {
@@ -263,14 +325,30 @@ class ClusterManagementAlgorithm:
                 score=0.0, rationale=f"Insufficient GPUs: need {job.required_gpus}, have {len(metrics)}",
             )
 
+        capable_metrics = []
+        skipped_reasons: list[str] = []
+        for m in metrics:
+            ok, reason = self._check_node_capability(m, job)
+            if not ok:
+                skipped_reasons.append(reason)
+                continue
+            capable_metrics.append(m)
+
+        if len(capable_metrics) < job.required_gpus:
+            return ScheduleDecision(
+                job_id=job.job_id, assigned_gpus=[], policy=self.scheduling_policy,
+                score=0.0, rationale=f"Insufficient capable GPUs: need {job.required_gpus}, have {len(capable_metrics)}. "
+                                     f"Skipped: {'; '.join(skipped_reasons[:5])}",
+            )
+
         scored_gpus = [
             (m, self._compute_gpu_score(m, job, self.scheduling_policy))
-            for m in metrics
+            for m in capable_metrics
             if m.memory_pct <= 100 - (job.required_memory_gib / max(1, m.power_cap_watts) * 100)
         ]
 
         if not scored_gpus:
-            scored_gpus = [(m, self._compute_gpu_score(m, job, self.scheduling_policy)) for m in metrics]
+            scored_gpus = [(m, self._compute_gpu_score(m, job, self.scheduling_policy)) for m in capable_metrics]
 
         scored_gpus.sort(key=lambda x: x[1]["raw_score"], reverse=True)
         selected = scored_gpus[: job.required_gpus]

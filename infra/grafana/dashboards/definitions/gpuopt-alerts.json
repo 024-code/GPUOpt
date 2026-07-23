@@ -1,0 +1,28 @@
+{
+  "title": "GPUOpt Alerts",
+  "uid": "gpuopt-alerts",
+  "tags": ["gpuopt"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "title": "Remediations",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(gpuopt_remediations_total[5m])", "legendFormat": "{{action}}"}]
+    },
+    {
+      "title": "Healer Status",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 8, "w": 4, "h": 4},
+      "targets": [{"expr": "gpuopt_healer_running", "legendFormat": "Healer"}]
+    },
+    {
+      "title": "Prediction Results",
+      "type": "piechart",
+      "gridPos": {"x": 4, "y": 8, "w": 8, "h": 8},
+      "targets": [{"expr": "rate(gpuopt_predictions_total[1h])", "legendFormat": "{{result}}"}]
+    }
+  ]
+}

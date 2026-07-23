@@ -1730,10 +1730,24 @@ class SystemInfo(BaseModel):
     cpu_cores: int = 0
     cpu_threads: int = 0
     cpu_usage_percent: float = 0.0
+    cpu_architecture: str = ""
+    cpu_socket: str = ""
+    cpu_vendor: str = ""
+    cpu_base_freq_mhz: float = 0.0
+    cpu_max_freq_mhz: float = 0.0
+    cpu_l3_cache_kb: int = 0
+    cpu_igpu_model: str = ""
+    cpu_catalog_match: dict[str, Any] | None = None
     ram_total_gb: float = 0.0
     ram_available_gb: float = 0.0
     ram_used_gb: float = 0.0
     ram_usage_percent: float = 0.0
+    ram_type: str = ""
+    ram_form_factor: str = ""
+    ram_speed_mhz: int = 0
+    ram_ecc: bool = False
+    ram_num_dimms: int = 0
+    ram_dimms: list[dict[str, Any]] = Field(default_factory=list)
     gpu_count: int = 0
     gpus: list[dict[str, Any]] = Field(default_factory=list)
     total_gpu_memory_gb: float = 0.0

@@ -1,0 +1,22 @@
+{
+  "title": "GPUOpt Cost Analysis",
+  "uid": "gpuopt-cost",
+  "tags": ["gpuopt"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "title": "Cost Metrics Overview",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 3},
+      "targets": [{"expr": "gpuopt_http_requests_total", "legendFormat": "Requests"}]
+    },
+    {
+      "title": "Scheduled Jobs",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 3, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(gpuopt_scheduled_jobs_total[5m])", "legendFormat": "{{status}}"}]
+    }
+  ]
+}

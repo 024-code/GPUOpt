@@ -3,71 +3,61 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GPUOpt Dashboard</title>
-  <link rel="stylesheet" href="css/style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>GPUOpt — Cluster Intelligence Platform</title>
+  <link rel="stylesheet" href="css/style.css?v=2">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
   <div id="app">
+    <div id="three-bg"></div>
+
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="logo">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <path d="M9 12h6M12 9v6"/>
+            <rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 12h6M12 9v6"/>
           </svg>
           <span>GPUOpt</span>
         </div>
-        <p class="subtitle">Cluster Optimizer</p>
+        <p class="subtitle">Cluster Intelligence</p>
       </div>
       <nav class="sidebar-nav">
         <a href="#" class="nav-item active" data-view="dashboard">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           Dashboard
         </a>
         <a href="#" class="nav-item" data-view="clusters">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           Clusters
         </a>
-        <a href="#" class="nav-item" data-view="submit">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-          Submit Job
+        <a href="#" class="nav-item" data-view="evolution">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Evolution
         </a>
-        <a href="#" class="nav-item" data-view="jobs">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/>
-          </svg>
-          Jobs
+        <a href="#" class="nav-item" data-view="simulate">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>
+          Simulate
         </a>
-        <a href="#" class="nav-item" data-view="monitor">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          Monitor
+        <a href="#" class="nav-item" data-view="costs">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Cost &amp; Forecast
+        </a>
+        <a href="#" class="nav-item" data-view="realtime">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Real-Time
         </a>
         <a href="#" class="nav-item" data-view="twin">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
           Digital Twin
         </a>
-        <a href="#" class="nav-item" data-view="predictions">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          Predictions
+        <a href="#" class="nav-item" data-view="grafana">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Grafana
         </a>
         <a href="#" class="nav-item" data-view="rtx">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           RTX 4090
         </a>
       </nav>
@@ -86,167 +76,125 @@
         <h1 class="page-title" id="pageTitle">Dashboard</h1>
         <div class="topbar-actions">
           <button class="btn btn-sm" onclick="refreshCurrentView()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             Refresh
           </button>
         </div>
       </header>
 
       <div class="view-container">
-        <section class="view active" id="view-dashboard">
+
+        <!-- ─── DASHBOARD ─── -->
+        <section class="view view-3d active" id="view-dashboard">
           <div class="stats-grid" id="dashboardStats"></div>
           <div class="grid-2col">
-            <div class="card">
-              <div class="card-header"><h3>Cluster Health</h3></div>
-              <div class="card-body" id="clusterHealthChart"><p class="placeholder">Loading...</p></div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>GPU Utilization Overview</h3></div>
-              <div class="card-body" id="gpuUtilChart"><p class="placeholder">Loading...</p></div>
-            </div>
+            <div class="card"><div class="card-header"><h3>Cluster Health</h3></div><div class="card-body" id="clusterHealthChart"><p class="placeholder">Loading...</p></div></div>
+            <div class="card"><div class="card-header"><h3>GPU Utilization Overview</h3></div><div class="card-body" id="gpuUtilChart"><p class="placeholder">Loading...</p></div></div>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>Recent Activity</h3></div>
-            <div class="card-body" id="recentActivity"><p class="placeholder">No recent activity</p></div>
-          </div>
+          <div class="card"><div class="card-header"><h3>Recent Activity</h3></div><div class="card-body" id="recentActivity"><p class="placeholder">No recent activity</p></div></div>
         </section>
 
-        <section class="view" id="view-clusters">
-          <div class="card">
-            <div class="card-header">
-              <h3>Clusters</h3>
-              <button class="btn btn-sm btn-primary" onclick="showView('submit')">+ New Cluster</button>
-            </div>
-            <div class="card-body" id="clustersList"><p class="placeholder">Loading clusters...</p></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3>Cluster Details</h3></div>
-            <div class="card-body" id="clusterDetail"><p class="placeholder">Select a cluster to view details</p></div>
-          </div>
+        <!-- ─── CLUSTERS ─── -->
+        <section class="view view-3d" id="view-clusters">
+          <div class="card"><div class="card-header"><h3>Clusters</h3></div><div class="card-body" id="clustersList"><p class="placeholder">Loading clusters...</p></div></div>
+          <div class="card"><div class="card-header"><h3>Cluster Details</h3></div><div class="card-body" id="clusterDetail"><p class="placeholder">Select a cluster to view details</p></div></div>
         </section>
 
-        <section class="view" id="view-submit">
+        <!-- ─── EVOLUTION ─── -->
+        <section class="view view-3d" id="view-evolution">
           <div class="grid-2col">
             <div class="card">
-              <div class="card-header"><h3>Submit New Job</h3></div>
+              <div class="card-header">
+                <h3>Policy Evolution Engine</h3>
+                <button class="btn btn-primary btn-sm" onclick="runEvolution()">Run Evolution</button>
+              </div>
               <div class="card-body">
-                <form id="jobForm" onsubmit="submitJob(event)">
-                  <div class="form-group">
-                    <label for="clusterSelect">Cluster</label>
-                    <select id="clusterSelect" required></select>
-                  </div>
-                  <div class="form-group">
-                    <label for="jobName">Job Name</label>
-                    <input type="text" id="jobName" placeholder="training-job-1" required>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label for="requiredGpus">GPUs Required</label>
-                      <input type="number" id="requiredGpus" value="1" min="1" max="256">
-                    </div>
-                    <div class="form-group">
-                      <label for="requiredCpu">CPU Cores</label>
-                      <input type="number" id="requiredCpu" value="4" min="1">
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label for="requiredMemory">Memory (GB)</label>
-                      <input type="number" id="requiredMemory" value="16" min="0.1" step="0.1">
-                    </div>
-                    <div class="form-group">
-                      <label for="runtimeHours">Est. Runtime (hrs)</label>
-                      <input type="number" id="runtimeHours" value="2.5" min="0.1" step="0.1">
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label for="priority">Priority (1-10)</label>
-                      <input type="number" id="priority" value="5" min="1" max="10">
-                    </div>
-                    <div class="form-group">
-                      <label for="modelName">Model Name</label>
-                      <input type="text" id="modelName" placeholder="llama-2-7b">
-                    </div>
-                  </div>
-                  <div class="form-group checkbox-group">
-                    <label>
-                      <input type="checkbox" id="checkpointable">
-                      <span>Checkpointable</span>
-                    </label>
-                  </div>
-                  <button type="submit" class="btn btn-primary btn-full" id="submitBtn">
-                    <span id="submitBtnText">Submit Job</span>
-                    <span class="spinner" id="submitSpinner" style="display:none"></span>
-                  </button>
-                </form>
+                <div class="form-row">
+                  <div class="form-group"><label>Generations</label><input type="number" id="evoGenerations" value="100" min="10" max="500"></div>
+                  <div class="form-group"><label>Population</label><input type="number" id="evoPopulation" value="50" min="10" max="200"></div>
+                </div>
+                <div id="evolutionStatus"><p class="placeholder">Configure and click Run Evolution</p></div>
+              </div>
+            </div>
+            <div class="card"><div class="card-header"><h3>Fitness Score</h3></div><div class="card-body"><canvas id="evolutionChart"></canvas></div></div>
+          </div>
+          <div class="grid-2col">
+            <div class="card"><div class="card-header"><h3>Best Evolved Policy</h3></div><div class="card-body"><pre id="bestPolicy" style="max-height:250px;overflow:auto"><p class="placeholder">Run evolution to see the best policy</p></pre></div></div>
+            <div class="card"><div class="card-header"><h3>Policy Comparison</h3></div><div class="card-body"><canvas id="policyCompareChart"></canvas></div></div>
+          </div>
+        </section>
+
+        <!-- ─── SIMULATE ─── -->
+        <section class="view view-3d" id="view-simulate">
+          <div class="grid-2col">
+            <div class="card">
+              <div class="card-header"><h3>Scenario A — Current Policy</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Policy</label><select id="simPolicyA"><option value="round_robin">Round Robin</option><option value="least_loaded">Least Loaded</option><option value="risk_aware">Risk Aware</option><option value="thermal_aware">Thermal Aware</option><option value="power_efficient">Power Efficient</option></select></div>
+                  <div class="form-group"><label>GPUs</label><input type="number" id="simGpusA" value="8" min="1" max="256"></div>
+                </div>
+                <div class="sim-results" id="simResultsA"><p class="placeholder">Configure and run simulation</p></div>
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><h3>Cluster Resources</h3></div>
-              <div class="card-body" id="clusterResources"><p class="placeholder">Select a cluster to view resources</p></div>
-            </div>
-          </div>
-          <div class="card" id="resultCard" style="display:none">
-            <div class="card-header"><h3>Submission Result</h3></div>
-            <div class="card-body" id="resultContent"></div>
-          </div>
-        </section>
-
-        <section class="view" id="view-jobs">
-          <div class="card">
-            <div class="card-header"><h3>Scheduler Metrics</h3></div>
-            <div class="card-body" id="schedulerMetrics"><p class="placeholder">Loading...</p></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3>Submitted Jobs</h3></div>
-            <div class="card-body" id="jobsList">
-              <p class="placeholder">Jobs submitted via the API will appear here after submission.</p>
-              <div id="jobsHistory"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="view" id="view-monitor">
-          <div class="grid-2col">
-            <div class="card">
-              <div class="card-header"><h3>GPU Snapshot</h3></div>
-              <div class="card-body" id="gpuSnapshot"><p class="placeholder">Loading GPU metrics...</p></div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>Domain Counts</h3></div>
-              <div class="card-body" id="domainCounts"><p class="placeholder">Loading domain data...</p></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3>Node Telemetry</h3></div>
-            <div class="card-body" id="nodeTelemetry"><p class="placeholder">Select a cluster to view telemetry</p></div>
-          </div>
-        </section>
-
-        <section class="view" id="view-twin">
-          <div class="grid-2col">
-            <div class="card">
-              <div class="card-header"><h3>Digital Twin State</h3></div>
-              <div class="card-body" id="twinState"><p class="placeholder">Select a cluster to view twin state</p></div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>Twin Comparison</h3></div>
-              <div class="card-body" id="twinComparison"><p class="placeholder">Sync twin and compare with actual state</p></div>
+              <div class="card-header"><h3>Scenario B — Proposed Policy</h3></div>
+              <div class="card-body">
+                <div class="form-row">
+                  <div class="form-group"><label>Policy</label><select id="simPolicyB"><option value="hybrid">Hybrid</option><option value="memory_bandwidth">Memory Bandwidth</option><option value="ecc_required">ECC Required</option><option value="round_robin">Round Robin</option><option value="least_loaded">Least Loaded</option></select></div>
+                  <div class="form-group"><label>GPUs</label><input type="number" id="simGpusB" value="8" min="1" max="256"></div>
+                </div>
+                <div class="sim-results" id="simResultsB"><p class="placeholder">Configure and run simulation</p></div>
+              </div>
             </div>
           </div>
           <div class="card">
             <div class="card-header">
-              <h3>Twin Controls</h3>
+              <h3>Side-by-Side Comparison</h3>
+              <button class="btn btn-primary btn-sm" onclick="runCompareSimulation()">Run Comparison</button>
             </div>
             <div class="card-body">
+              <div class="grid-2col">
+                <div><canvas id="simCompareChart"></canvas></div>
+                <div id="simCompareDetails"><p class="placeholder">Results will appear here</p></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── COSTS & FORECAST ─── -->
+        <section class="view view-3d" id="view-costs">
+          <div class="stats-grid" id="costStats"></div>
+          <div class="grid-2col">
+            <div class="card"><div class="card-header"><h3>Cost Trends</h3></div><div class="card-body"><canvas id="costTrendChart"></canvas></div></div>
+            <div class="card"><div class="card-header"><h3>GPU Demand Forecast</h3></div><div class="card-body"><canvas id="forecastChart"></canvas></div></div>
+          </div>
+          <div class="grid-2col">
+            <div class="card"><div class="card-header"><h3>Savings Projection</h3></div><div class="card-body" id="savingsProjection"><p class="placeholder">Loading projections...</p></div></div>
+            <div class="card"><div class="card-header"><h3>Cost Breakdown</h3></div><div class="card-body" id="costBreakdown"><p class="placeholder">Loading cost breakdown...</p></div></div>
+          </div>
+        </section>
+
+        <!-- ─── REAL-TIME ─── -->
+        <section class="view view-3d" id="view-realtime">
+          <div class="grid-2col">
+            <div class="card"><div class="card-header"><h3>GPU Metrics <span class="live-badge" id="wsBadge">● Live</span></h3></div><div class="card-body" id="realtimeGpuMetrics"><p class="placeholder">Connecting to WebSocket...</p></div></div>
+            <div class="card"><div class="card-header"><h3>Cluster State</h3></div><div class="card-body" id="realtimeClusterState"><p class="placeholder">Waiting for data...</p></div></div>
+          </div>
+          <div class="card"><div class="card-header"><h3>Real-Time Utilization</h3></div><div class="card-body"><canvas id="realtimeChart"></canvas></div></div>
+        </section>
+
+        <!-- ─── DIGITAL TWIN ─── -->
+        <section class="view view-3d" id="view-twin">
+          <div class="grid-2col">
+            <div class="card"><div class="card-header"><h3>Digital Twin State</h3></div><div class="card-body" id="twinState"><p class="placeholder">Select a cluster to view twin state</p></div></div>
+            <div class="card"><div class="card-header"><h3>Twin Comparison</h3></div><div class="card-body" id="twinComparison"><p class="placeholder">Sync twin and compare with actual state</p></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Twin Controls</h3></div>
+            <div class="card-body">
               <div class="form-row">
-                <div class="form-group">
-                  <label for="twinClusterSelect">Cluster</label>
-                  <select id="twinClusterSelect"></select>
-                </div>
+                <div class="form-group"><label>Cluster</label><select id="twinClusterSelect"></select></div>
                 <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
                   <button class="btn btn-primary" onclick="syncTwin()">Sync Twin</button>
                   <button class="btn" onclick="compareTwin()">Compare</button>
@@ -257,93 +205,74 @@
           </div>
         </section>
 
-        <section class="view" id="view-predictions">
-          <div class="grid-2col">
-            <div class="card">
-              <div class="card-header"><h3>Cluster Failure Prediction</h3></div>
-              <div class="card-body">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="predClusterSelect">Cluster</label>
-                    <select id="predClusterSelect"></select>
-                  </div>
-                  <div class="form-group" style="display:flex;align-items:flex-end">
-                    <button class="btn btn-primary" onclick="analyzeCluster()">Analyze Cluster</button>
-                  </div>
-                </div>
-                <div id="predictionResults"><p class="placeholder">Click "Analyze Cluster" to run predictions</p></div>
+        <!-- ─── GRAFANA ─── -->
+        <section class="view view-3d" id="view-grafana">
+          <div class="card"><div class="card-header"><h3>Grafana Dashboards</h3><div class="grafana-actions"><button class="btn btn-sm" onclick="document.getElementById('grafanaFrame').src = document.getElementById('grafanaFrame').src">Reload</button></div></div></div>
+          <div class="grafana-container">
+            <div class="grafana-sidebar">
+              <div class="grafana-preset" data-url="http://localhost:3000/d/gpuopt-cluster/gpuopt-cluster-overview?orgId=1&refresh=5s" onclick="loadGrafanaDashboard(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Cluster Overview
+              </div>
+              <div class="grafana-preset" data-url="http://localhost:3000/d/gpuopt-gpu/gpuopt-gpu-metrics?orgId=1&refresh=5s" onclick="loadGrafanaDashboard(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                GPU Metrics
+              </div>
+              <div class="grafana-preset" data-url="http://localhost:3000/d/gpuopt-cost/gpuopt-cost-analysis?orgId=1&refresh=5s" onclick="loadGrafanaDashboard(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Cost Analysis
+              </div>
+              <div class="grafana-preset" data-url="http://localhost:3000/d/gpuopt-evo/gpuopt-evolution?orgId=1&refresh=10s" onclick="loadGrafanaDashboard(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>
+                Evolution
+              </div>
+              <div class="grafana-preset" data-url="http://localhost:3000/d/gpuopt-alerts/gpuopt-alerts?orgId=1&refresh=5s" onclick="loadGrafanaDashboard(this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Alerts
               </div>
             </div>
-            <div class="card">
-              <div class="card-header"><h3>Predictor Status</h3></div>
-              <div class="card-body" id="predictorStatus"><p class="placeholder">Loading predictor info...</p></div>
+            <div class="grafana-main">
+              <iframe id="grafanaFrame" src="about:blank" frameborder="0"></iframe>
+              <div class="grafana-overlay" id="grafanaOverlay">
+                <p>Select a dashboard from the left panel</p>
+                <p class="grafana-hint">Grafana must be running at <code>http://localhost:3000</code></p>
+                <div class="grafana-metrics-preview">
+                  <div class="stat-label">Available Metrics (from /metrics endpoint)</div>
+                  <div class="grafana-tags">
+                    <span>gpuopt_cluster_gpu_total</span>
+                    <span>gpuopt_cluster_gpu_utilization</span>
+                    <span>gpuopt_policy_evolutions_total</span>
+                    <span>gpuopt_scheduled_jobs_total</span>
+                    <span>gpuopt_predictions_total</span>
+                    <span>gpuopt_remediations_total</span>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
+          <div class="grid-2col" style="margin-top:16px">
+            <div class="card"><div class="card-header"><h3>KPI Dashboard</h3></div><div class="card-body"><canvas id="kpiChart"></canvas></div></div>
+            <div class="card"><div class="card-header"><h3>Placement Metrics</h3></div><div class="card-body" id="placementMetrics"><p class="placeholder">Loading KPI data...</p></div></div>
           </div>
         </section>
 
-        <section class="view" id="view-rtx">
+        <!-- ─── RTX 4090 ─── -->
+        <section class="view view-3d" id="view-rtx">
           <div class="stats-grid" id="rtxStats"></div>
           <div class="grid-2col">
-            <div class="card">
-              <div class="card-header"><h3>GPU Details</h3></div>
-              <div class="card-body" id="rtxGpus"><p class="placeholder">Detecting RTX 4090...</p></div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3>System Resources</h3></div>
-              <div class="card-body" id="rtxSystem"><p class="placeholder">Loading...</p></div>
-            </div>
+            <div class="card"><div class="card-header"><h3>GPU Details</h3></div><div class="card-body" id="rtxGpus"><p class="placeholder">Detecting RTX 4090...</p></div></div>
+            <div class="card"><div class="card-header"><h3>System Resources</h3></div><div class="card-body" id="rtxSystem"><p class="placeholder">Loading...</p></div></div>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>Submit Job to RTX 4090</h3></div>
-            <div class="card-body">
-              <form id="rtxJobForm" onsubmit="submitRtxJob(event)">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="rtxJobName">Job Name</label>
-                    <input type="text" id="rtxJobName" value="LLM Training" required>
-                  </div>
-                  <div class="form-group">
-                    <label for="rtxGpuCount">GPUs</label>
-                    <input type="number" id="rtxGpuCount" value="1" min="1">
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="rtxMemory">Memory (GB)</label>
-                    <input type="number" id="rtxMemory" value="16" min="0.1" step="0.1">
-                  </div>
-                  <div class="form-group">
-                    <label for="rtxRuntime">Runtime (hrs)</label>
-                    <input type="number" id="rtxRuntime" value="2.0" min="0.1" step="0.1">
-                  </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="rtxPriority">Priority</label>
-                    <input type="number" id="rtxPriority" value="5" min="1" max="10">
-                  </div>
-                  <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
-                    <button type="submit" class="btn btn-primary" id="rtxSubmitBtn">Submit Job</button>
-                    <button type="button" class="btn" onclick="simulateRtxJob()">Simulate First</button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><h3>Jobs</h3></div>
-            <div class="card-body" id="rtxJobs"><p class="placeholder">No jobs submitted</p></div>
-          </div>
-          <div class="card" style="display:none" id="rtxResultCard">
-            <div class="card-header"><h3>Result</h3></div>
-            <div class="card-body" id="rtxResult"></div>
-          </div>
+          <div class="card"><div class="card-header"><h3>Submit Job to RTX 4090</h3></div><div class="card-body"><form id="rtxJobForm" onsubmit="submitRtxJob(event)"><div class="form-row"><div class="form-group"><label>Job Name</label><input type="text" id="rtxJobName" value="LLM Training"></div><div class="form-group"><label>GPUs</label><input type="number" id="rtxGpuCount" value="1" min="1"></div></div><div class="form-row"><div class="form-group"><label>Memory (GB)</label><input type="number" id="rtxMemory" value="16" step="0.1"></div><div class="form-group"><label>Runtime (hrs)</label><input type="number" id="rtxRuntime" value="2.0" step="0.1"></div></div><div class="form-row"><div class="form-group"><label>Priority</label><input type="number" id="rtxPriority" value="5" min="1" max="10"></div><div class="form-group" style="display:flex;align-items:flex-end;gap:8px"><button type="submit" class="btn btn-primary">Submit Job</button><button type="button" class="btn" onclick="simulateRtxJob()">Simulate First</button></div></div></form></div></div>
+          <div class="card"><div class="card-header"><h3>Jobs</h3></div><div class="card-body" id="rtxJobs"><p class="placeholder">No jobs submitted</p></div></div>
+          <div class="card" style="display:none" id="rtxResultCard"><div class="card-header"><h3>Result</h3></div><div class="card-body" id="rtxResult"></div></div>
         </section>
+
       </div>
     </main>
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/api.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>

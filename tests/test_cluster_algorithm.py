@@ -8,10 +8,11 @@ from gpuopt.ml.cluster_algorithm import (
     ClusterManagementAlgorithm,
     GpuMetrics,
     JobSpec,
+    NodeHardware,
     PowerCapMode,
     SchedulingPolicy,
 )
-from gpuopt.ml.node_simulation import ClusterTopology
+from gpuopt.ml.node_simulation import ClusterTopology, SimNode
 
 
 @pytest.fixture
@@ -158,6 +159,133 @@ class TestClusterManagementAlgorithm:
         assert algorithm.power_cap_mode == PowerCapMode.PREDICTIVE
         algorithm.scheduling_policy = SchedulingPolicy.RISK_AWARE
         assert algorithm.scheduling_policy == SchedulingPolicy.RISK_AWARE
+
+
+class TestSchedulingPolicies:
+    def test_memory_bandwidth_policy(self, algorithm, topology):
+        job = JobSpec(job_id="bw-test", required_gpus=2)
+        algorithm.scheduling_policy = SchedulingPolicy.MEMORY_BANDWIDTH
+        decision = algorithm.schedule_job(job, topology)
+        assert len(decision.assigned_gpus) == 2
+        assert decision.policy == SchedulingPolicy.MEMORY_BANDWIDTH
+
+    def test_ecc_required_policy(self, algorithm, topology):
+        job = JobSpec(job_id="ecc-test", required_gpus=2)
+        algorithm.scheduling_policy = SchedulingPolicy.ECC_REQUIRED
+        decision = algorithm.schedule_job(job, topology)
+        assert len(decision.assigned_gpus) == 2
+        assert decision.policy == SchedulingPolicy.ECC_REQUIRED
+
+    def test_check_node_capability_ecc_required(self, algorithm):
+        metric = GpuMetrics(
+            index=0, node_id="node-0", engine_util_pct=0, memory_pct=0,
+            gpu_temp_c=35, power_watts=30, power_cap_watts=400,
+            xid_errors=0, ecc_errors=0, fan_speed_pct=30, clock_mhz=1000,
+            wear_factor=0, ecc_capable=True, memory_bandwidth_gbps=200,
+            node_cpu_cores=64, node_cpu_vendor="intel", node_memory_type="DDR5",
+        )
+        job = JobSpec(require_ecc=True)
+        ok, reason = algorithm._check_node_capability(metric, job)
+        assert ok is True
+        assert reason == ""
+
+    def test_check_node_capability_ecc_missing(self, algorithm):
+        metric = GpuMetrics(
+            index=0, node_id="node-0", engine_util_pct=0, memory_pct=0,
+            gpu_temp_c=35, power_watts=30, power_cap_watts=400,
+            xid_errors=0, ecc_errors=0, fan_speed_pct=30, clock_mhz=1000,
+            wear_factor=0, ecc_capable=False, memory_bandwidth_gbps=200,
+            node_cpu_cores=64, node_cpu_vendor="intel", node_memory_type="DDR5",
+        )
+        job = JobSpec(require_ecc=True)
+        ok, reason = algorithm._check_node_capability(metric, job)
+        assert ok is False
+        assert "lacks ECC" in reason
+
+    def test_check_node_capability_bandwidth_ok(self, algorithm):
+        metric = GpuMetrics(
+            index=0, node_id="node-0", engine_util_pct=0, memory_pct=0,
+            gpu_temp_c=35, power_watts=30, power_cap_watts=400,
+            xid_errors=0, ecc_errors=0, fan_speed_pct=30, clock_mhz=1000,
+            wear_factor=0, ecc_capable=True, memory_bandwidth_gbps=200,
+            node_cpu_cores=64, node_cpu_vendor="intel", node_memory_type="DDR5",
+        )
+        job = JobSpec(min_memory_bandwidth_gbps=100)
+        ok, reason = algorithm._check_node_capability(metric, job)
+        assert ok is True
+
+    def test_check_node_capability_bandwidth_insufficient(self, algorithm):
+        metric = GpuMetrics(
+            index=0, node_id="node-0", engine_util_pct=0, memory_pct=0,
+            gpu_temp_c=35, power_watts=30, power_cap_watts=400,
+            xid_errors=0, ecc_errors=0, fan_speed_pct=30, clock_mhz=1000,
+            wear_factor=0, ecc_capable=True, memory_bandwidth_gbps=50,
+            node_cpu_cores=64, node_cpu_vendor="intel", node_memory_type="DDR5",
+        )
+        job = JobSpec(min_memory_bandwidth_gbps=100)
+        ok, reason = algorithm._check_node_capability(metric, job)
+        assert ok is False
+        assert "bandwidth" in reason
+
+    def test_check_node_capability_cpu_cores_ok(self, algorithm):
+        metric = GpuMetrics(
+            index=0, node_id="node-0", engine_util_pct=0, memory_pct=0,
+            gpu_temp_c=35, power_watts=30, power_cap_watts=400,
+            xid_errors=0, ecc_errors=0, fan_speed_pct=30, clock_mhz=1000,
+            wear_factor=0, ecc_capable=True, memory_bandwidth_gbps=200,
+            node_cpu_cores=64, node_cpu_vendor="intel", node_memory_type="DDR5",
+        )
+        job = JobSpec(min_cpu_cores=32)
+        ok, reason = algorithm._check_node_capability(metric, job)
+        assert ok is True
+
+    def test_check_node_capability_cpu_vendor_match(self, algorithm):
+        metric = GpuMetrics(
+            index=0, node_id="node-0", engine_util_pct=0, memory_pct=0,
+            gpu_temp_c=35, power_watts=30, power_cap_watts=400,
+            xid_errors=0, ecc_errors=0, fan_speed_pct=30, clock_mhz=1000,
+            wear_factor=0, ecc_capable=True, memory_bandwidth_gbps=200,
+            node_cpu_cores=64, node_cpu_vendor="amd", node_memory_type="DDR5",
+        )
+        job = JobSpec(cpu_vendor_preference="amd")
+        ok, reason = algorithm._check_node_capability(metric, job)
+        assert ok is True
+
+    def test_check_node_capability_cpu_vendor_mismatch(self, algorithm):
+        metric = GpuMetrics(
+            index=0, node_id="node-0", engine_util_pct=0, memory_pct=0,
+            gpu_temp_c=35, power_watts=30, power_cap_watts=400,
+            xid_errors=0, ecc_errors=0, fan_speed_pct=30, clock_mhz=1000,
+            wear_factor=0, ecc_capable=True, memory_bandwidth_gbps=200,
+            node_cpu_cores=64, node_cpu_vendor="intel", node_memory_type="DDR5",
+        )
+        job = JobSpec(cpu_vendor_preference="amd")
+        ok, reason = algorithm._check_node_capability(metric, job)
+        assert ok is False
+
+    def test_job_rejected_when_no_capable_nodes(self, algorithm, topology):
+        # Set all node memory to non-ECC and require ECC
+        for node in topology.nodes:
+            node.ecc_capable = False
+        job = JobSpec(job_id="reject-ecc", required_gpus=1, require_ecc=True)
+        decision = algorithm.schedule_job(job, topology)
+        assert len(decision.assigned_gpus) == 0
+        assert "Insufficient capable" in decision.rationale
+
+    def test_node_hardware_from_simnode(self, algorithm):
+        node = SimNode(
+            node_id="test-node", gpus=[],
+            cpu_cores=32, system_memory_gib=256.0,
+        )
+        node.cpu_vendor = "amd"
+        node.memory_type = "DDR5"
+        node.memory_bandwidth_gbps = 153.6
+        node.ecc_capable = True
+        nh = algorithm._get_node_hardware(node)
+        assert nh.cpu_cores == 32
+        assert nh.memory_bandwidth_gbps == 153.6
+        assert nh.ecc_capable is True
+        assert nh.memory_type == "DDR5"
 
 
 class TestEndpoints:

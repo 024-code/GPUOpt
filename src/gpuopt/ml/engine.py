@@ -7,7 +7,10 @@ from typing import Any
 
 import numpy as np
 
+from ..cpu_catalog import get_cpu_catalog, lookup_cpu
 from ..gpu_catalog import get_gpu_catalog
+from ..hardware_detector import detect_local_hardware, detect_local_memory
+from ..memory_catalog import SystemMemorySummary
 from .automl import AutoMLEngine
 from .closed_loop import ClosedLoopTrainer
 from .cluster_algorithm import ClusterManagementAlgorithm
@@ -405,6 +408,38 @@ class MLEngine:
             "rationale": decision.rationale,
             "capability_check": cap_check,
         }
+
+    def list_cpu_catalog(
+        self,
+        vendor: str | None = None,
+        socket: str | None = None,
+        min_cores: int | None = None,
+        has_igpu: bool | None = None,
+        min_igpu_tflops: float | None = None,
+    ) -> list[dict]:
+        return get_cpu_catalog().query(vendor=vendor, socket=socket, min_cores=min_cores,
+                                        has_igpu=has_igpu, min_igpu_tflops=min_igpu_tflops)
+
+    def lookup_cpu(self, name: str) -> dict | None:
+        entry = get_cpu_catalog().lookup(name)
+        return entry.to_dict() if entry else None
+
+    def get_cpu_catalog_stats(self) -> dict:
+        cat = get_cpu_catalog()
+        return {
+            "total_entries": len(cat.entries),
+            "by_vendor": {v: len(g) for v, g in cat.group_by_vendor().items()},
+            "by_socket": {s: len(g) for s, g in cat.group_by_socket().items()},
+            "vendors": ["intel", "amd"],
+            "sockets": [s.value for s in type(get_cpu_catalog()).__dict__.get("entries", [])] if False else [],
+        }
+
+    def detect_hardware(self) -> dict:
+        return detect_local_hardware()
+
+    def detect_memory(self) -> dict:
+        mem = detect_local_memory()
+        return mem.to_dict()
 
     def health(self) -> dict:
         return {

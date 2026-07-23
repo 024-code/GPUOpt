@@ -1,0 +1,22 @@
+{
+  "title": "GPUOpt GPU Metrics",
+  "uid": "gpuopt-gpu",
+  "tags": ["gpuopt"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "title": "GPU Utilization by Cluster",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [{"expr": "gpuopt_cluster_gpu_utilization", "legendFormat": "{{cluster_id}}"}]
+    },
+    {
+      "title": "Total GPUs",
+      "type": "bargauge",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 6},
+      "targets": [{"expr": "gpuopt_cluster_gpu_total", "legendFormat": "{{cluster_id}}"}]
+    }
+  ]
+}

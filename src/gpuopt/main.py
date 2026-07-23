@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
@@ -46,8 +48,28 @@ from .environment_checks_router import router as environment_checks_router
 from .ml.router import router as ml_router
 from .ollama.router import router as ollama_router
 from .ratelimit import RateLimitMiddleware
+from .streaming import streaming_router
 from .s24_routes import s24_router
 from .versioning import V1DeprecationMiddleware, create_v2_router, mount_v2
+
+
+_discovery_service: Any = None
+_retrain_task: asyncio.Task | None = None
+
+
+async def _periodic_model_retrain(interval_hours: int = 24) -> None:
+    """Background task that retrains ML models on a schedule."""
+    import asyncio
+    logger.info("Periodic model retrain task started (interval=%dh)", interval_hours)
+    while True:
+        try:
+            from .ml.engine import MLEngine
+            engine = MLEngine()
+            result = engine.train_ensemble()
+            logger.info("Scheduled retrain complete: %s", result)
+        except Exception as exc:
+            logger.warning("Scheduled retrain failed: %s", exc)
+        await asyncio.sleep(interval_hours * 3600)
 
 
 @asynccontextmanager
@@ -69,7 +91,32 @@ async def lifespan(_: FastAPI):
         admin_users = [u for u in rbac.list_users() if u.username == "admin"]
         if admin_users:
             logger.info("Using default admin user with API key prefix %s", admin_users[0].api_key_prefix)
+
+    global _discovery_service, _retrain_task
+    from .discovery_service import AutoDiscoveryService, NodeDiscoveryTarget
+    _discovery_service = AutoDiscoveryService(interval_seconds=300)
+    discovery_env = os.environ.get("GPUOPT_DISCOVERY_TARGETS", "")
+    if discovery_env:
+        for entry in discovery_env.split(","):
+            entry = entry.strip()
+            if entry:
+                _discovery_service.add_target(NodeDiscoveryTarget(host=entry))
+    if _discovery_service.targets:
+        await _discovery_service.start()
+        logger.info("Auto-discovery started with %d targets", len(_discovery_service.targets))
+    retrain_interval = int(os.environ.get("GPUOPT_RETRAIN_INTERVAL_HOURS", "0"))
+    if retrain_interval > 0:
+        _retrain_task = asyncio.create_task(_periodic_model_retrain(retrain_interval))
+        logger.info("Periodic model retraining started (interval=%dh)", retrain_interval)
     yield
+    if _discovery_service and _discovery_service.targets:
+        await _discovery_service.stop()
+    if _retrain_task:
+        _retrain_task.cancel()
+        try:
+            await _retrain_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
@@ -134,6 +181,7 @@ app.include_router(environment_checks_router)
 app.include_router(rtx_router)
 app.include_router(ml_router)
 app.include_router(ollama_router)
+app.include_router(streaming_router)
 
 frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
 if frontend_dir.is_dir():

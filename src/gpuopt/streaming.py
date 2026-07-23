@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.params import Depends
 
+from .dependencies import get_alert_manager, get_repository
 from .s23_features import AlertManager
 from .repository import ClusterRepository
 
@@ -177,3 +179,50 @@ class StreamService:
             logger.warning("Metrics stream error: %s", exc)
         finally:
             manager.disconnect(websocket, channel=f"metrics:{cluster_id}")
+
+
+streaming_router = APIRouter(prefix="/api/v1/stream", tags=["streaming"])
+
+
+@streaming_router.websocket("/cluster/{cluster_id}")
+async def ws_cluster_state(
+    websocket: WebSocket,
+    cluster_id: str,
+    repo: ClusterRepository = Depends(get_repository),
+) -> None:
+    from uuid import UUID
+    svc = StreamService(repository=repo)
+    await svc.stream_cluster_state(websocket, UUID(cluster_id))
+
+
+@streaming_router.websocket("/alerts")
+async def ws_alerts_all(
+    websocket: WebSocket,
+    alert_manager: AlertManager = Depends(get_alert_manager),
+    repo: ClusterRepository = Depends(get_repository),
+) -> None:
+    svc = StreamService(repository=repo, alert_manager=alert_manager)
+    await svc.stream_alerts(websocket)
+
+
+@streaming_router.websocket("/alerts/{cluster_id}")
+async def ws_alerts_cluster(
+    websocket: WebSocket,
+    cluster_id: str,
+    alert_manager: AlertManager = Depends(get_alert_manager),
+    repo: ClusterRepository = Depends(get_repository),
+) -> None:
+    from uuid import UUID
+    svc = StreamService(repository=repo, alert_manager=alert_manager)
+    await svc.stream_alerts(websocket, UUID(cluster_id))
+
+
+@streaming_router.websocket("/metrics/{cluster_id}")
+async def ws_metrics(
+    websocket: WebSocket,
+    cluster_id: str,
+    repo: ClusterRepository = Depends(get_repository),
+) -> None:
+    from uuid import UUID
+    svc = StreamService(repository=repo)
+    await svc.stream_metrics(websocket, UUID(cluster_id))

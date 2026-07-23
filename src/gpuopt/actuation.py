@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess as sp
+import time
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
 from .repository import ClusterRepository
@@ -265,3 +268,66 @@ class ActuationService:
             "value": "config_updated",
             "message": f"[{rec_type}] {title}: general adjustment applied",
         }
+
+    @staticmethod
+    def nvidia_smi_set_power_cap(gpu_index: int, power_watts: int, timeout: int = 5) -> dict[str, Any]:
+        """Set GPU power cap via nvidia-smi. Returns result dict with success/error."""
+        cmd = ["nvidia-smi", "-i", str(gpu_index), "-pl", str(power_watts)]
+        try:
+            r = sp.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if r.returncode == 0:
+                return {"success": True, "gpu_index": gpu_index, "power_cap_watts": power_watts,
+                        "message": f"GPU {gpu_index} power cap set to {power_watts}W"}
+            return {"success": False, "gpu_index": gpu_index, "error": r.stderr.strip() or r.stdout.strip()}
+        except FileNotFoundError:
+            return {"success": False, "gpu_index": gpu_index, "error": "nvidia-smi not found"}
+        except sp.TimeoutExpired:
+            return {"success": False, "gpu_index": gpu_index, "error": "nvidia-smi timed out"}
+
+    @staticmethod
+    def nvidia_smi_get_power_caps(gpu_count: int = 8, timeout: int = 5) -> list[dict[str, Any]]:
+        """Query power caps for all GPUs via nvidia-smi."""
+        results: list[dict[str, Any]] = []
+        for idx in range(gpu_count):
+            try:
+                r = sp.run(
+                    ["nvidia-smi", "-i", str(idx), "-q", "-d", "POWER"],
+                    capture_output=True, text=True, timeout=timeout,
+                )
+                if r.returncode != 0:
+                    continue
+                for line in r.stdout.splitlines():
+                    line_stripped = line.strip()
+                    if "Power Cap" in line_stripped and ":" in line_stripped:
+                        part = line_stripped.split(":")[1].strip().split()[0]
+                        try:
+                            cap = int(float(part))
+                            results.append({"gpu_index": idx, "power_cap_watts": cap})
+                        except ValueError:
+                            pass
+            except (FileNotFoundError, sp.TimeoutExpired):
+                continue
+        return results
+
+    @staticmethod
+    def nvidia_smi_get_clock_rates(gpu_index: int, timeout: int = 5) -> dict[str, Any]:
+        """Query current and max clock rates for a GPU via nvidia-smi."""
+        cmd = ["nvidia-smi", "-i", str(gpu_index), "-q", "-d", "CLOCK"]
+        try:
+            r = sp.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if r.returncode != 0:
+                return {"gpu_index": gpu_index, "error": r.stderr.strip()}
+            clocks: dict[str, Any] = {"gpu_index": gpu_index}
+            for line in r.stdout.splitlines():
+                ls = line.strip()
+                if "Graphics" in ls and ":" in ls:
+                    clocks["graphics_clock_mhz"] = ls.split(":")[1].strip().split()[0]
+                if "Memory" in ls and ":" in ls and "Slowdown" not in ls and "Max" not in ls:
+                    clocks["memory_clock_mhz"] = ls.split(":")[1].strip().split()[0]
+                if "SM" in ls and ":" in ls and "Clock" not in ls:
+                    clocks["sm_clock_mhz"] = ls.split(":")[1].strip().split()[0]
+                if "Video" in ls and ":" in ls:
+                    clocks["video_clock_mhz"] = ls.split(":")[1].strip().split()[0]
+            return clocks
+        except (FileNotFoundError, sp.TimeoutExpired) as exc:
+            return {"gpu_index": gpu_index, "error": str(exc)}
