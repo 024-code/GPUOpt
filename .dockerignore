@@ -32,5 +32,3 @@ migrations/
 alembic.ini
 docker-compose.yml
 Makefile
-pyproject.toml
-README.md

@@ -1,8 +1,7 @@
 x-shared-env: &shared-env
   GPUOPT_ENV: production
-  GPUOPT_DATABASE_URL: postgresql://gpuopt:${POSTGRES_PASSWORD:-gpuopt}@db:5432/gpuopt
-  GPUOPT_DATABASE_POOL_MIN: 4
-  GPUOPT_DATABASE_POOL_MAX: 20
+  GPUOPT_DATABASE_PATH: /data/gpuopt.db
+  GPUOPT_API_WORKERS: 1
   GPUOPT_ALLOW_MOCK_GPU: "true"
   GPUOPT_LOG_LEVEL: INFO
 

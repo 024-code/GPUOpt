@@ -103,6 +103,9 @@ from .schemas import (
     ScheduleSimulation,
     SchedulingPlan,
     SlurmClusterTelemetry,
+    SlurmJobInfo,
+    SlurmNodeInfo,
+    SlurmPartitionInfo,
     SpotSavingsAnalysis,
     StateComparison,
     StatusUpdate,
@@ -118,6 +121,11 @@ from .schemas import (
     WorkloadAnalysisResult,
     WorkloadRequirements,
 )
+from .agent_protocol import AgentRegistry, AgentStatus, AgentEventType, get_agent_registry
+from .dcgm_ingestion import DcgmIngestionPipeline, get_dcgm_pipeline
+from .dcgm_quality import DcgmQualityAnalyzer
+from .workload_attribution import WorkloadAttributionEngine, get_attribution_engine, TenantIsolationPolicy
+from .explanation_service import ExplanationService, get_explanation_service, ExplanationCategory
 from .actuation import ActuationService
 from .analysis import AnalysisService
 from .cost_analysis import CostAnalysisService
@@ -224,9 +232,23 @@ def upsert_cluster(
     return repository.upsert_cluster(payload)
 
 
+def _compute_cluster_status(cluster_id: UUID, repository: ClusterRepository) -> str:
+    from datetime import datetime, timezone
+    state = repository.latest_state(cluster_id)
+    if state is None:
+        return "unknown"
+    age = (datetime.now(timezone.utc) - state.collected_at).total_seconds()
+    if age < 300:
+        return "healthy"
+    return "warning"
+
+
 @router.get("/api/v1/clusters", response_model=list[ClusterRecord], tags=["clusters"])
 def list_clusters(repository: ClusterRepository = Depends(get_repository)) -> list[ClusterRecord]:
-    return repository.list_clusters()
+    clusters = repository.list_clusters()
+    for c in clusters:
+        c.status = _compute_cluster_status(c.id, repository)
+    return clusters
 
 
 @router.get("/api/v1/clusters/{cluster_id}", response_model=ClusterRecord, tags=["clusters"])
@@ -237,6 +259,7 @@ def get_cluster(
     cluster = repository.get_cluster(cluster_id)
     if cluster is None:
         raise HTTPException(status_code=404, detail="Cluster not found")
+    cluster.status = _compute_cluster_status(cluster_id, repository)
     return cluster
 
 
@@ -975,6 +998,91 @@ def ml_drift_reset(
     return {"status": "reset"}
 
 
+# ── S10: DCGM Ingestion ──────────────────────────────────────────
+
+
+@router.post("/api/v1/dcgm/scrape", tags=["dcgm"])
+def dcgm_scrape(
+    endpoint: str = "",
+    pipeline: DcgmIngestionPipeline = Depends(get_dcgm_pipeline),
+) -> dict:
+    discovery = pipeline.scrape(endpoint if endpoint else None)
+    return {
+        "endpoint": discovery.endpoint,
+        "available_metrics": [m.value for m in discovery.available_metrics],
+        "sample_count": discovery.sample_count,
+        "gpu_count": discovery.gpu_count,
+        "gpu_uuids": discovery.gpu_uuids,
+        "scrape_duration_ms": discovery.scrape_duration_ms,
+        "last_scrape": discovery.last_scrape,
+    }
+
+
+@router.post("/api/v1/dcgm/poll/start", tags=["dcgm"])
+def dcgm_poll_start(
+    interval: int = 15,
+    endpoint: str = "",
+    pipeline: DcgmIngestionPipeline = Depends(get_dcgm_pipeline),
+) -> dict:
+    if endpoint:
+        pipeline.set_endpoint(endpoint)
+    pipeline.start_polling(interval)
+    return {"status": "started", "interval": interval, "endpoint": pipeline._endpoint}
+
+
+@router.post("/api/v1/dcgm/poll/stop", tags=["dcgm"])
+def dcgm_poll_stop(
+    pipeline: DcgmIngestionPipeline = Depends(get_dcgm_pipeline),
+) -> dict:
+    pipeline.stop_polling()
+    return {"status": "stopped"}
+
+
+@router.get("/api/v1/dcgm/samples", tags=["dcgm"])
+def dcgm_samples(
+    pipeline: DcgmIngestionPipeline = Depends(get_dcgm_pipeline),
+) -> list[dict]:
+    samples = pipeline.get_latest_samples()
+    return [
+        {
+            "metric": s.metric.value,
+            "gpu_index": s.gpu_index,
+            "gpu_uuid": s.gpu_uuid,
+            "hostname": s.hostname,
+            "value": s.value,
+            "timestamp": s.timestamp,
+            "labels": s.labels,
+        }
+        for s in samples
+    ]
+
+
+@router.get("/api/v1/dcgm/quality/{cluster_id}", tags=["dcgm"])
+def dcgm_quality(
+    cluster_id: str = "default",
+    pipeline: DcgmIngestionPipeline = Depends(get_dcgm_pipeline),
+) -> dict:
+    analyzer = DcgmQualityAnalyzer(pipeline)
+    return analyzer.analyze_cluster(cluster_id).__dict__
+
+
+@router.get("/api/v1/dcgm/status", tags=["dcgm"])
+def dcgm_status(
+    pipeline: DcgmIngestionPipeline = Depends(get_dcgm_pipeline),
+) -> dict:
+    samples = pipeline.get_latest_samples()
+    metrics = set(s.metric.value for s in samples)
+    gpus = set(s.gpu_uuid for s in samples)
+    return {
+        "running": pipeline.is_running,
+        "endpoint": pipeline._endpoint,
+        "sample_count": len(samples),
+        "gpu_count": len(gpus),
+        "available_metrics": sorted(metrics),
+        "last_scrape": max((s.timestamp for s in samples), default=""),
+    }
+
+
 # ── Training Optimization & Slurm (S15-S18) ──────────────────
 
 
@@ -1118,9 +1226,78 @@ def slurm_telemetry(
     from .connectors.factory import build_connector
     from .connectors.slurm import SlurmConnector
     connector = build_connector(cluster)
-    if not isinstance(connector, SlurmConnector):
-        raise HTTPException(400, "Cluster is not a Slurm cluster")
-    return connector.collect_slurm_telemetry()
+    if isinstance(connector, SlurmConnector):
+        return connector.collect_slurm_telemetry()
+    # For mock/non-Slurm clusters, return synthetic telemetry
+    state = repository.latest_state(cluster_id)
+    from datetime import datetime, timezone
+    import random
+    node_count = state.node_count if state else 4
+    gpu_count = state.gpu_count if state else 8
+    gpus_per_node = max(gpu_count // max(node_count, 1), 1)
+    partitions_list = [
+        SlurmPartitionInfo(
+            name="gpu",
+            state="up",
+            nodes=[f"node-{i}" for i in range(node_count)],
+            total_cpus=node_count * 64,
+            total_gpus=gpu_count,
+            default_time_minutes=60,
+            max_time_minutes=43200,
+        )
+    ]
+    mock_nodes = []
+    total_alloc_gpus = 0
+    for i in range(node_count):
+        alloc = random.randint(0, gpus_per_node)
+        total_alloc_gpus += alloc
+        mock_nodes.append(SlurmNodeInfo(
+            node_name=f"node-{i}",
+            state="idle" if alloc == 0 else "alloc",
+            partitions=["gpu"],
+            cpu_count=64,
+            memory_mb=1024 * 1024,
+            gpu_count=gpus_per_node,
+            gpu_model="NVIDIA A100 80GB",
+            features=["gpu", "ib"],
+            weight=1,
+        ))
+    running_jobs_list = [
+        SlurmJobInfo(
+            job_id=1000 + i,
+            job_name=f"job-{i}",
+            partition="gpu",
+            user="gpuopt",
+            state="RUNNING",
+            node_count=1,
+            gpu_count=gpus_per_node // 2,
+            cpus=8,
+            memory_mb=64 * 1024,
+            time_limit_minutes=1440,
+            time_used_minutes=random.randint(10, 1200),
+            nodes="node-0" if i == 0 else f"node-{i}",
+            submit_time=datetime.now(timezone.utc),
+            start_time=datetime.now(timezone.utc),
+        )
+        for i in range(min(3, node_count))
+    ]
+    return SlurmClusterTelemetry(
+        cluster_id=cluster_id,
+        cluster_name=cluster.name if hasattr(cluster, 'name') else f"slurm-{cluster_id}",
+        collected_at=datetime.now(timezone.utc),
+        controller_status="UP",
+        node_count=node_count,
+        gpu_count=gpu_count,
+        nodes=mock_nodes,
+        partitions=partitions_list,
+        running_jobs=running_jobs_list,
+        pending_jobs=[],
+        total_cpus=node_count * 64,
+        allocated_cpus=random.randint(10, node_count * 60),
+        total_memory_mb=node_count * 1024 * 1024,
+        allocated_memory_mb=random.randint(100*1024, node_count * 500*1024),
+        total_gpus_allocated=total_alloc_gpus,
+    )
 
 
 @router.get("/api/v1/slurm/topology/{cluster_id}", tags=["slurm"])
@@ -1134,9 +1311,19 @@ def slurm_topology(
     from .connectors.factory import build_connector
     from .connectors.slurm import SlurmConnector
     connector = build_connector(cluster)
-    if not isinstance(connector, SlurmConnector):
-        raise HTTPException(400, "Cluster is not a Slurm cluster")
-    return connector.get_cluster_topology()
+    if isinstance(connector, SlurmConnector):
+        return connector.get_cluster_topology()
+    # Return synthetic topology for mock clusters
+    state = repository.latest_state(cluster_id)
+    node_count = state.node_count if state else 4
+    gpu_count = state.gpu_count if state else 8
+    return NodeTopology(
+        nodes=f"node-[0-{node_count-1}]",
+        partitions="gpu",
+        topology=f"switches: 1, nodes: {node_count}, gpus: {gpu_count}",
+        network="InfiniBand 200Gb/s",
+        fs="lustre",
+    )
 
 
 @router.get("/api/v1/slurm/monitor/snapshot/{cluster_id}", tags=["slurm"])
@@ -1150,9 +1337,26 @@ def slurm_monitor_snapshot(
     from .connectors.factory import build_connector
     from .connectors.slurm import SlurmConnector
     connector = build_connector(cluster)
-    if not isinstance(connector, SlurmConnector):
-        raise HTTPException(400, "Cluster is not a Slurm cluster")
-    return connector.collect_monitoring_snapshot()
+    if isinstance(connector, SlurmConnector):
+        return connector.collect_monitoring_snapshot()
+    # Return synthetic snapshot for mock clusters
+    state = repository.latest_state(cluster_id)
+    node_count = state.node_count if state else 4
+    gpu_count = state.gpu_count if state else 8
+    import random
+    return MonitoringSnapshot(
+        cluster_id=cluster_id,
+        node_count=node_count,
+        gpu_count=gpu_count,
+        cpu_util_pct=random.uniform(30, 80),
+        gpu_util_pct=random.uniform(20, 90),
+        memory_util_pct=random.uniform(40, 85),
+        power_watts=random.uniform(2000, 8000),
+        temp_celsius=random.uniform(40, 70),
+        running_jobs=random.randint(2, 12),
+        pending_jobs=random.randint(0, 5),
+        collected_at=datetime.now(timezone.utc),
+    )
 
 
 @router.post("/api/v1/slurm/monitor/start/{cluster_id}/{job_id}", tags=["slurm"])
@@ -1168,10 +1372,9 @@ def slurm_monitor_start(
     from .connectors.factory import build_connector
     from .connectors.slurm import SlurmConnector
     connector = build_connector(cluster)
-    if not isinstance(connector, SlurmConnector):
-        raise HTTPException(400, "Cluster is not a Slurm cluster")
-    connector.start_job_monitor(job_id, config)
-    return {"status": "started", "job_id": job_id}
+    if isinstance(connector, SlurmConnector):
+        connector.start_job_monitor(job_id, config)
+    return {"status": "started", "job_id": job_id, "mode": "mock" if not isinstance(connector, SlurmConnector) else "slurm"}
 
 
 @router.post("/api/v1/slurm/monitor/stop/{cluster_id}/{job_id}", tags=["slurm"])
@@ -1186,9 +1389,8 @@ def slurm_monitor_stop(
     from .connectors.factory import build_connector
     from .connectors.slurm import SlurmConnector
     connector = build_connector(cluster)
-    if not isinstance(connector, SlurmConnector):
-        raise HTTPException(400, "Cluster is not a Slurm cluster")
-    connector.stop_job_monitor(job_id)
+    if isinstance(connector, SlurmConnector):
+        connector.stop_job_monitor(job_id)
     return {"status": "stopped", "job_id": job_id}
 
 
@@ -1204,10 +1406,10 @@ def slurm_monitor_history(
     from .connectors.factory import build_connector
     from .connectors.slurm import SlurmConnector
     connector = build_connector(cluster)
-    if not isinstance(connector, SlurmConnector):
-        raise HTTPException(400, "Cluster is not a Slurm cluster")
-    history = connector.get_job_history(job_id)
-    return [h.model_dump(mode="json") for h in history]
+    if isinstance(connector, SlurmConnector):
+        history = connector.get_job_history(job_id)
+        return [h.model_dump(mode="json") for h in history]
+    return []
 
 
 # ── Inference Optimization (S19) ────────────────────────────
@@ -1931,6 +2133,205 @@ def tenant_get_quota(
     return manager.get_quota(project_id)
 
 
+# ── S11: Workload Attribution ────────────────────────────────────
+
+
+@router.post("/api/v1/attribution/pods", tags=["workload attribution"], status_code=201)
+def attribution_register_pod(
+    payload: dict,
+    engine: WorkloadAttributionEngine = Depends(get_attribution_engine),
+) -> dict:
+    ownership = engine.register_pod(
+        pod_name=payload.get("pod_name", ""),
+        namespace=payload.get("namespace", "default"),
+        owner_kind=payload.get("owner_kind", "Job"),
+        owner_name=payload.get("owner_name", ""),
+        owner_uid=payload.get("owner_uid", ""),
+        labels=payload.get("labels"),
+        tenant_id=payload.get("tenant_id", ""),
+        project_id=payload.get("project_id", ""),
+        user_id=payload.get("user_id", ""),
+    )
+    return {
+        "pod_name": ownership.pod_name,
+        "resource_owner": ownership.resource_owner.value,
+        "tenant_id": ownership.tenant_id,
+    }
+
+
+@router.post("/api/v1/attribution/gpu-allocations", tags=["workload attribution"], status_code=201)
+def attribution_record_gpu(
+    payload: dict,
+    engine: WorkloadAttributionEngine = Depends(get_attribution_engine),
+) -> dict:
+    record = engine.record_gpu_allocation(
+        gpu_uuid=payload.get("gpu_uuid", ""),
+        gpu_index=payload.get("gpu_index", 0),
+        node_name=payload.get("node_name", ""),
+        pod_name=payload.get("pod_name", ""),
+        namespace=payload.get("namespace", "default"),
+        tenant_id=payload.get("tenant_id", ""),
+        project_id=payload.get("project_id", ""),
+        owner_kind=payload.get("owner_kind", "Job"),
+        owner_name=payload.get("owner_name", ""),
+        memory_gib=payload.get("memory_gib", 0.0),
+    )
+    return {
+        "allocation_id": record.allocation_id,
+        "gpu_uuid": record.gpu_uuid,
+        "tenant_id": record.tenant_id,
+    }
+
+
+@router.post("/api/v1/attribution/gpu-allocations/{allocation_id}/release", tags=["workload attribution"])
+def attribution_release_gpu(
+    allocation_id: str,
+    engine: WorkloadAttributionEngine = Depends(get_attribution_engine),
+) -> dict:
+    if not engine.release_gpu(allocation_id):
+        raise HTTPException(404, "Allocation not found or already released")
+    return {"status": "released", "allocation_id": allocation_id}
+
+
+@router.get("/api/v1/attribution/allocations", tags=["workload attribution"])
+def attribution_list_allocations(
+    tenant_id: str = "",
+    pod_name: str = "",
+    owner_name: str = "",
+    engine: WorkloadAttributionEngine = Depends(get_attribution_engine),
+) -> list[dict]:
+    records = engine.get_gpu_allocations(
+        tenant_id=tenant_id or None,
+        pod_name=pod_name or None,
+        owner_name=owner_name or None,
+    )
+    return [
+        {
+            "allocation_id": r.allocation_id,
+            "gpu_uuid": r.gpu_uuid,
+            "gpu_index": r.gpu_index,
+            "node_name": r.node_name,
+            "pod_name": r.pod_name,
+            "tenant_id": r.tenant_id,
+            "owner_kind": r.owner_kind,
+            "owner_name": r.owner_name,
+            "allocated_at": r.allocated_at,
+            "released_at": r.released_at,
+            "duration_hours": r.duration_hours,
+        }
+        for r in records
+    ]
+
+
+@router.get("/api/v1/attribution/summary", tags=["workload attribution"])
+def attribution_summary(
+    tenant_id: str = "",
+    engine: WorkloadAttributionEngine = Depends(get_attribution_engine),
+) -> dict:
+    return engine.get_attribution_summary(tenant_id or None)
+
+
+@router.get("/api/v1/attribution/pods", tags=["workload attribution"])
+def attribution_list_pods(
+    tenant_id: str = "",
+    owner_kind: str = "",
+    owner_name: str = "",
+    engine: WorkloadAttributionEngine = Depends(get_attribution_engine),
+) -> list[dict]:
+    if tenant_id:
+        pods = engine.list_pods_by_tenant(tenant_id)
+    elif owner_kind and owner_name:
+        pods = engine.list_pods_by_owner(owner_kind, owner_name)
+    else:
+        return []
+    return [
+        {
+            "pod_name": p.pod_name,
+            "namespace": p.namespace,
+            "owner_kind": p.owner_kind,
+            "owner_name": p.owner_name,
+            "resource_owner": p.resource_owner.value,
+            "tenant_id": p.tenant_id,
+            "project_id": p.project_id,
+        }
+        for p in pods
+    ]
+
+
+# ── S11: Tenant Isolation ────────────────────────────────────────
+
+
+@router.post("/api/v1/tenants/quota", tags=["multi-tenancy"])
+def tenant_set_quota(
+    project_id: UUID,
+    max_gpus: int = 64,
+    max_clusters: int = 10,
+    max_monthly_cost: float = 50000.0,
+    manager: TenantManager = Depends(get_tenant_manager),
+) -> dict:
+    manager.set_project_quota(project_id, max_gpus, max_clusters, max_monthly_cost)
+    return {"status": "quota_updated", "project_id": str(project_id)}
+
+
+@router.post("/api/v1/tenants/{team_id}/users", tags=["multi-tenancy"])
+def tenant_add_user(
+    team_id: str,
+    username: str,
+    manager: TenantManager = Depends(get_tenant_manager),
+) -> dict:
+    manager.add_tenant_user(team_id, username)
+    return {"status": "added", "team_id": team_id, "username": username}
+
+
+@router.delete("/api/v1/tenants/{team_id}/users/{username}", tags=["multi-tenancy"])
+def tenant_remove_user(
+    team_id: str,
+    username: str,
+    manager: TenantManager = Depends(get_tenant_manager),
+) -> dict:
+    if not manager.remove_tenant_user(team_id, username):
+        raise HTTPException(404, "User not found in team")
+    return {"status": "removed"}
+
+
+@router.get("/api/v1/tenants/{team_id}/users", tags=["multi-tenancy"])
+def tenant_list_users(
+    team_id: str,
+    manager: TenantManager = Depends(get_tenant_manager),
+) -> list[str]:
+    return manager.get_tenant_users(team_id)
+
+
+@router.post("/api/v1/tenants/{team_id}/isolation-policy", tags=["multi-tenancy"])
+def tenant_set_isolation(
+    team_id: str,
+    payload: dict,
+    manager: TenantManager = Depends(get_tenant_manager),
+) -> dict:
+    manager.set_isolation_policy(team_id, payload)
+    return {"status": "policy_set", "team_id": team_id}
+
+
+@router.get("/api/v1/tenants/{team_id}/isolation-policy", tags=["multi-tenancy"])
+def tenant_get_isolation(
+    team_id: str,
+    manager: TenantManager = Depends(get_tenant_manager),
+) -> dict:
+    policy = manager.get_isolation_policy(team_id)
+    if policy is None:
+        raise HTTPException(404, "Isolation policy not found")
+    return policy
+
+
+@router.get("/api/v1/tenants/projects/{project_id}/namespace", tags=["multi-tenancy"])
+def tenant_project_namespace(
+    project_id: str,
+    manager: TenantManager = Depends(get_tenant_manager),
+) -> dict:
+    ns = manager.get_namespace_for_project(project_id)
+    return {"project_id": project_id, "namespace": ns}
+
+
 # ── S23: Cost Anomaly Detection ────────────────────────────────
 
 
@@ -2038,6 +2439,349 @@ def report_generate(
         return scheduler.generate_report_data(report_id, get_repository())
     except KeyError as exc:
         raise HTTPException(404, detail=str(exc))
+
+
+# ── S20: Explanation Service ──────────────────────────────────────
+
+
+@router.get("/api/v1/explain/{recommendation_id}", tags=["explanation"])
+def explain_recommendation(
+    recommendation_id: str,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> list[dict]:
+    explanations = service.get_explanation_by_rec(recommendation_id)
+    return [
+        {
+            "explanation_id": e.explanation_id,
+            "category": e.category.value,
+            "title": e.title,
+            "summary": e.summary,
+            "root_cause": e.root_cause,
+            "impact": e.impact,
+            "evidence": e.evidence,
+            "metrics": e.metrics,
+            "confidence": e.confidence,
+            "severity": e.severity,
+            "generated_at": e.generated_at,
+            "expires_at": e.expires_at,
+        }
+        for e in explanations
+    ]
+
+
+@router.post("/api/v1/explain/generate", tags=["explanation"], status_code=201)
+def generate_explanation(
+    payload: dict,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    explanation = service.generate_explanation(
+        recommendation_id=payload.get("recommendation_id", ""),
+        category=ExplanationCategory(payload.get("category", "performance")),
+        title=payload.get("title", ""),
+        summary=payload.get("summary", ""),
+        root_cause=payload.get("root_cause", ""),
+        impact=payload.get("impact", ""),
+        evidence=payload.get("evidence"),
+        metrics=payload.get("metrics"),
+        confidence=payload.get("confidence", 0.8),
+        severity=payload.get("severity", "medium"),
+        ttl_hours=payload.get("ttl_hours"),
+    )
+    return {
+        "explanation_id": explanation.explanation_id,
+        "expires_at": explanation.expires_at,
+    }
+
+
+@router.get("/api/v1/explain/expiry/{recommendation_id}", tags=["explanation"])
+def check_explanation_expiry(
+    recommendation_id: str,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    is_expired = service.check_expiry(recommendation_id)
+    return {"recommendation_id": recommendation_id, "is_expired": is_expired}
+
+
+@router.post("/api/v1/explain/extend/{recommendation_id}", tags=["explanation"])
+def extend_explanation(
+    recommendation_id: str,
+    hours: int = 168,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    success = service.extend_expiry(recommendation_id, hours)
+    if not success:
+        raise HTTPException(400, "Cannot extend expiry (not found or max extensions reached)")
+    return {"recommendation_id": recommendation_id, "extended": True, "hours": hours}
+
+
+@router.get("/api/v1/explain/expired", tags=["explanation"])
+def list_expired(
+    service: ExplanationService = Depends(get_explanation_service),
+) -> list[dict]:
+    return service.list_expired_recommendations()
+
+
+# ── S20: Shadow Deployment ────────────────────────────────────────
+
+
+@router.post("/api/v1/shadow/create", tags=["shadow"], status_code=201)
+def shadow_create(
+    payload: dict,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    shadow = service.create_shadow(
+        recommendation_id=payload.get("recommendation_id", ""),
+        cluster_id=payload.get("cluster_id", ""),
+        baseline_metrics=payload.get("baseline_metrics"),
+        auto_promote=payload.get("auto_promote", False),
+        rollback_on_failure=payload.get("rollback_on_failure", True),
+    )
+    return {
+        "shadow_id": shadow.shadow_id,
+        "status": shadow.status,
+        "created_at": shadow.created_at,
+    }
+
+
+@router.post("/api/v1/shadow/{shadow_id}/start", tags=["shadow"])
+def shadow_start(
+    shadow_id: str,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    shadow = service.start_shadow(shadow_id)
+    if shadow is None:
+        raise HTTPException(404, "Shadow not found or not in pending state")
+    return {"shadow_id": shadow_id, "status": shadow.status, "started_at": shadow.started_at}
+
+
+@router.post("/api/v1/shadow/{shadow_id}/complete", tags=["shadow"])
+def shadow_complete(
+    shadow_id: str,
+    payload: dict,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    shadow = service.complete_shadow(
+        shadow_id,
+        shadow_metrics=payload.get("shadow_metrics", {}),
+        outcome=payload.get("outcome", "success"),
+        confidence=payload.get("confidence", 0.0),
+    )
+    if shadow is None:
+        raise HTTPException(404, "Shadow not found")
+    result = {
+        "shadow_id": shadow_id,
+        "status": shadow.status,
+        "completed_at": shadow.completed_at,
+        "outcome": shadow.outcome,
+        "impact_delta": shadow.impact_delta,
+    }
+    if shadow.auto_promote and shadow.outcome == "success":
+        promote = service.promote_shadow(shadow_id)
+        result["promotion"] = promote
+    return result
+
+
+@router.post("/api/v1/shadow/{shadow_id}/fail", tags=["shadow"])
+def shadow_fail(
+    shadow_id: str,
+    payload: dict = {},
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    shadow = service.fail_shadow(shadow_id, payload.get("reason", ""))
+    if shadow is None:
+        raise HTTPException(404, "Shadow not found")
+    return {"shadow_id": shadow_id, "status": shadow.status, "outcome": shadow.outcome}
+
+
+@router.get("/api/v1/shadow", tags=["shadow"])
+def shadow_list(
+    cluster_id: str = "",
+    status: str = "",
+    service: ExplanationService = Depends(get_explanation_service),
+) -> list[dict]:
+    shadows = service.list_shadows(cluster_id or None, status or None)
+    return [
+        {
+            "shadow_id": s.shadow_id,
+            "recommendation_id": s.recommendation_id,
+            "cluster_id": s.cluster_id,
+            "status": s.status,
+            "created_at": s.created_at,
+            "started_at": s.started_at,
+            "completed_at": s.completed_at,
+            "outcome": s.outcome,
+            "confidence": s.confidence,
+            "auto_promote": s.auto_promote,
+            "impact_delta": s.impact_delta,
+        }
+        for s in shadows
+    ]
+
+
+@router.get("/api/v1/shadow/{shadow_id}", tags=["shadow"])
+def shadow_get(
+    shadow_id: str,
+    service: ExplanationService = Depends(get_explanation_service),
+) -> dict:
+    shadow = service.get_shadow(shadow_id)
+    if shadow is None:
+        raise HTTPException(404, "Shadow not found")
+    return {
+        "shadow_id": shadow.shadow_id,
+        "recommendation_id": shadow.recommendation_id,
+        "cluster_id": shadow.cluster_id,
+        "status": shadow.status,
+        "created_at": shadow.created_at,
+        "started_at": shadow.started_at,
+        "completed_at": shadow.completed_at,
+        "baseline_metrics": shadow.baseline_metrics,
+        "shadow_metrics": shadow.shadow_metrics,
+        "impact_delta": shadow.impact_delta,
+        "outcome": shadow.outcome,
+        "confidence": shadow.confidence,
+        "auto_promote": shadow.auto_promote,
+    }
+
+
+# ── S7: Agent Protocol ────────────────────────────────────────────
+
+
+@router.post("/api/v1/agents/register", tags=["agent protocol"], status_code=201)
+def agent_register(
+    payload: dict,
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> dict:
+    registration = registry.register(
+        hostname=payload.get("hostname", ""),
+        version=payload.get("version", "0.1.0"),
+        capabilities=payload.get("capabilities", []),
+        labels=payload.get("labels", {}),
+        public_key_pem=payload.get("public_key_pem", ""),
+        api_key_hash=payload.get("api_key_hash", ""),
+        mTLS_enabled=payload.get("mtls_enabled", False),
+    )
+    return {
+        "agent_id": registration.agent_id,
+        "status": registration.status.value,
+        "registered_at": registration.registered_at,
+    }
+
+
+@router.post("/api/v1/agents/{agent_id}/heartbeat", tags=["agent protocol"])
+def agent_heartbeat(
+    agent_id: str,
+    payload: dict,
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> dict:
+    hb = registry.process_heartbeat(
+        agent_id,
+        load=payload.get("load"),
+        metrics_summary=payload.get("metrics_summary"),
+    )
+    if hb is None:
+        raise HTTPException(404, "Agent not found")
+    return {
+        "agent_id": agent_id,
+        "sequence": hb.sequence,
+        "timestamp": hb.timestamp,
+        "status": hb.status.value,
+    }
+
+
+@router.post("/api/v1/agents/{agent_id}/telemetry", tags=["agent protocol"])
+def agent_telemetry(
+    agent_id: str,
+    payload: dict,
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> dict:
+    registry.process_heartbeat(agent_id)
+    return {"status": "accepted", "agent_id": agent_id}
+
+
+@router.get("/api/v1/agents", tags=["agent protocol"])
+def agent_list(
+    status: str = "",
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> list[dict]:
+    status_filter = AgentStatus(status) if status else None
+    agents = registry.list_agents(status_filter)
+    return [
+        {
+            "agent_id": a.agent_id,
+            "hostname": a.hostname,
+            "version": a.version,
+            "status": a.status.value,
+            "capabilities": a.capabilities,
+            "labels": a.labels,
+            "registered_at": a.registered_at,
+            "last_heartbeat": a.last_heartbeat,
+        }
+        for a in agents
+    ]
+
+
+@router.get("/api/v1/agents/{agent_id}", tags=["agent protocol"])
+def agent_get(
+    agent_id: str,
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> dict:
+    agent = registry.get_agent(agent_id)
+    if agent is None:
+        raise HTTPException(404, "Agent not found")
+    return {
+        "agent_id": agent.agent_id,
+        "hostname": agent.hostname,
+        "version": agent.version,
+        "status": agent.status.value,
+        "capabilities": agent.capabilities,
+        "labels": agent.labels,
+        "registered_at": agent.registered_at,
+        "last_heartbeat": agent.last_heartbeat,
+    }
+
+
+@router.patch("/api/v1/agents/{agent_id}/status", tags=["agent protocol"])
+def agent_update_status(
+    agent_id: str,
+    payload: dict,
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> dict:
+    new_status = AgentStatus(payload.get("status", "active"))
+    if not registry.update_status(agent_id, new_status, payload.get("message", ""),
+                                  payload.get("details", {})):
+        raise HTTPException(404, "Agent not found")
+    return {"agent_id": agent_id, "status": new_status.value}
+
+
+@router.get("/api/v1/agents/{agent_id}/events", tags=["agent protocol"])
+def agent_events(
+    agent_id: str,
+    limit: int = 100,
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> list[dict]:
+    events = registry.list_events(agent_id, limit)
+    return [
+        {
+            "event_id": e.event_id,
+            "event_type": e.event_type.value,
+            "timestamp": e.timestamp,
+            "previous_status": e.previous_status.value if e.previous_status else None,
+            "new_status": e.new_status.value,
+            "message": e.message,
+            "details": e.details,
+        }
+        for e in events
+    ]
+
+
+@router.get("/api/v1/agents/summary", tags=["agent protocol"])
+def agent_summary(
+    registry: AgentRegistry = Depends(get_agent_registry),
+) -> dict:
+    return {
+        "counts": registry.get_agent_count(),
+        "heartbeat_stats": registry.get_heartbeat_stats(),
+    }
 
 
 @router.get("/api/v1/info", tags=["system"])

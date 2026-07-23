@@ -5,6 +5,7 @@ import logging
 import math
 from typing import Any
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 from uuid import UUID
 
@@ -77,7 +78,7 @@ class InferenceService:
     suggests deployment configurations, and estimates inference costs.
     """
 
-    DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "inference"
+    DATA_DIR = Path(os.environ.get("GPUOPT_DATA_DIR", "/data")) / "inference"
 
     def __init__(self) -> None:
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)

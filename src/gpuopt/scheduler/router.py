@@ -9,6 +9,8 @@ from ..config import get_settings
 from ..k8s_operator.client import K8sClientWrapper
 from ..registry import get_registry
 from .rl_scheduler import Job, Node, RLScheduler
+from .resource_flavors import ResourceFlavorTier, get_flavor_manager
+from .fairness import DominantResourceFairness, ProportionalFairnessScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +113,94 @@ def list_kueue_queues() -> list[dict[str, Any]]:
     from .kueue_adapter import KueueAdapter
     adapter = KueueAdapter(client, _get_scheduler())
     return adapter.list_cluster_queues()
+
+
+@scheduler_router.get("/kueue/flavors")
+def list_kueue_flavors(
+    tier: str = "",
+) -> list[dict]:
+    fm = get_flavor_manager()
+    tier_filter = ResourceFlavorTier(tier) if tier else None
+    return [
+        {
+            "name": f.name, "tier": f.tier.value, "priority": f.priority,
+            "resources": f.resources, "active": f.active,
+        }
+        for f in fm.list_flavors(tier_filter)
+    ]
+
+
+@scheduler_router.post("/kueue/flavors")
+def create_kueue_flavor(data: dict) -> dict:
+    fm = get_flavor_manager()
+    tier = ResourceFlavorTier(data.get("tier", "standard"))
+    flavor = fm.create_flavor(
+        name=data.get("name", ""),
+        node_labels=data.get("node_labels", {}),
+        node_taints=data.get("node_taints", []),
+        resources=data.get("resources", {"nvidia.com/gpu": "1"}),
+        tier=tier,
+        priority=data.get("priority", 0),
+        max_workloads=data.get("max_workloads", 0),
+    )
+    return {
+        "name": flavor.name, "tier": flavor.tier.value,
+        "resources": flavor.resources,
+    }
+
+
+@scheduler_router.delete("/kueue/flavors/{flavor_name}")
+def delete_kueue_flavor(flavor_name: str) -> dict:
+    fm = get_flavor_manager()
+    if not fm.delete_flavor(flavor_name):
+        raise HTTPException(404, f"Flavor not found: {flavor_name}")
+    return {"status": "deleted", "name": flavor_name}
+
+
+@scheduler_router.get("/kueue/flavors/discover")
+def discover_kueue_flavors() -> list[dict]:
+    client = _get_k8s_client()
+    if client is None:
+        return []
+    from .kueue_adapter import KueueAdapter
+    adapter = KueueAdapter(client, _get_scheduler())
+    return adapter.discover_flavors_from_queues()
+
+
+@scheduler_router.post("/kueue/fairness")
+def compute_fairness(data: dict) -> dict:
+    tenants = data.get("tenants", {})
+    total_gpus = data.get("total_gpus", 8)
+    drf = DominantResourceFairness()
+    result = drf.compute(tenants, total_gpus)
+    return {
+        "allocations": [
+            {
+                "tenant_id": a.tenant_id,
+                "fair_share": a.fair_share,
+                "gpus_allocated": a.gpus_allocated,
+                "gpu_quota": a.gpu_quota,
+                "dominant_share": a.dominant_share,
+                "usage_ratio": a.usage_ratio,
+            }
+            for a in result.allocations
+        ],
+        "total_gpus": result.total_gpus,
+        "total_allocated": result.total_allocated,
+        "dominant_share_threshold": result.dominant_share_threshold,
+        "over_allocated": result.over_allocated,
+        "under_allocated": result.under_allocated,
+        "rebalance_actions": drf.suggest_rebalance(result),
+    }
+
+
+@scheduler_router.post("/kueue/fairness/schedule")
+def proportional_schedule(data: dict) -> dict:
+    tenants = data.get("tenants", {})
+    total_gpus = data.get("total_gpus", 8)
+    ps = ProportionalFairnessScheduler()
+    allocation = ps.schedule(tenants, total_gpus)
+    return {"allocation": allocation, "total_gpus": total_gpus, "total_allocated": sum(allocation.values())}
 
 
 @scheduler_router.post("/kueue/submit")

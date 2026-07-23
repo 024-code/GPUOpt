@@ -6,6 +6,7 @@ import logging
 import random
 import uuid
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -49,7 +50,7 @@ class AutoMLEngine:
     def __init__(self, random_state: int = 42) -> None:
         self.rng = random.Random(random_state)
         self.np_rng = np.random.default_rng(random_state)
-        self.results_dir = Path(__file__).resolve().parents[2] / "data" / "automl"
+        self.results_dir = Path(os.environ.get("GPUOPT_DATA_DIR", "/data")) / "automl"
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
     def random_search(

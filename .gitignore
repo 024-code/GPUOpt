@@ -23,3 +23,7 @@ CACHEDIR.TAG
 .DS_Store
 .claude/
 .opencode/
+NUL
+frontend/NUL
+data/
+server_*.log

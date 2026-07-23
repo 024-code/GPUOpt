@@ -7,12 +7,13 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.params import Depends
 
-from .dependencies import get_alert_manager, get_repository
+from .dependencies import get_alert_manager, get_repository, get_watch_manager
 from .s23_features import AlertManager
 from .repository import ClusterRepository
+from .watch_stream import WatchManager, WatchEvent
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,146 @@ class StreamService:
             manager.disconnect(websocket, channel=f"metrics:{cluster_id}")
 
 
+    async def watch_resource(
+        self, websocket: WebSocket, resource_type: str,
+        watch_manager: WatchManager | None = None,
+    ) -> None:
+        manager = watch_manager or get_watch_manager()
+        await manager.cache  # ensure initialized
+        await websocket.accept()
+        current_version = 0
+        try:
+            events = await manager.watch_stream(resource_type, current_version)
+            for event in events:
+                await websocket.send_json({
+                    "type": "watch_event",
+                    "event_type": event.event_type,
+                    "resource_type": event.resource_type,
+                    "resource_id": event.resource_id,
+                    "resource_version": event.resource_version,
+                    "data": event.data,
+                    "timestamp": event.timestamp,
+                })
+                if event.resource_version > current_version:
+                    current_version = event.resource_version
+
+            while True:
+                try:
+                    data = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+                    msg = json.loads(data)
+                    if msg.get("type") == "watch":
+                        since = msg.get("since_version", current_version)
+                        events = await manager.watch_stream(resource_type, since)
+                        for event in events:
+                            await websocket.send_json({
+                                "type": "watch_event",
+                                "event_type": event.event_type,
+                                "resource_type": event.resource_type,
+                                "resource_id": event.resource_id,
+                                "resource_version": event.resource_version,
+                                "data": event.data,
+                                "timestamp": event.timestamp,
+                            })
+                            if event.resource_version > current_version:
+                                current_version = event.resource_version
+                    elif msg.get("type") == "ping":
+                        await websocket.send_json({"type": "pong", "current_version": current_version})
+                except asyncio.TimeoutError:
+                    await websocket.send_json({
+                        "type": "keepalive",
+                        "current_version": current_version,
+                        "resource_type": resource_type,
+                    })
+        except WebSocketDisconnect:
+            pass
+        except Exception as exc:
+            logger.warning("Watch stream error for %s: %s", resource_type, exc)
+
+
 streaming_router = APIRouter(prefix="/api/v1/stream", tags=["streaming"])
+
+
+@streaming_router.websocket("/watch/{resource_type}")
+async def ws_watch_resource(
+    websocket: WebSocket,
+    resource_type: str,
+    watch_manager: WatchManager = Depends(get_watch_manager),
+    repo: ClusterRepository = Depends(get_repository),
+) -> None:
+    svc = StreamService(repository=repo)
+    await svc.watch_resource(websocket, resource_type, watch_manager)
+
+
+@streaming_router.get("/watch/{resource_type}")
+async def rest_watch_resource(
+    resource_type: str,
+    since_version: int = Query(0, ge=0),
+    watch_manager: WatchManager = Depends(get_watch_manager),
+) -> list[dict]:
+    events = watch_manager.watch(resource_type, since_version)
+    return [
+        {
+            "event_type": e.event_type,
+            "resource_type": e.resource_type,
+            "resource_id": e.resource_id,
+            "resource_version": e.resource_version,
+            "data": e.data,
+            "timestamp": e.timestamp,
+        }
+        for e in events
+    ]
+
+
+@streaming_router.get("/watch")
+async def rest_watch_all(
+    since_version: int = Query(0, ge=0),
+    watch_manager: WatchManager = Depends(get_watch_manager),
+) -> list[dict]:
+    events = watch_manager.watch_all(since_version)
+    return [
+        {
+            "event_type": e.event_type,
+            "resource_type": e.resource_type,
+            "resource_id": e.resource_id,
+            "resource_version": e.resource_version,
+            "data": e.data,
+            "timestamp": e.timestamp,
+        }
+        for e in events
+    ]
+
+
+@streaming_router.get("/cache/status")
+async def cache_status(
+    watch_manager: WatchManager = Depends(get_watch_manager),
+) -> dict:
+    return {
+        "cache_size": watch_manager.cache.size(),
+        "current_version": watch_manager.cache.get_current_version(),
+        "resource_types": list(watch_manager.cache.list_all().keys()),
+    }
+
+
+@streaming_router.post("/cache/resync")
+async def cache_resync(
+    watch_manager: WatchManager = Depends(get_watch_manager),
+    repo: ClusterRepository = Depends(get_repository),
+) -> dict:
+    def _source() -> list[tuple[str, str, dict[str, Any]]]:
+        items: list[tuple[str, str, dict[str, Any]]] = []
+        for cluster in repo.list_clusters():
+            cid = str(cluster.id)
+            items.append(("cluster", cid, {
+                "id": cid, "name": cluster.name, "environment": cluster.environment,
+                "connector_type": cluster.connector_type,
+            }))
+            state = repo.latest_state(cluster.id)
+            if state:
+                items.append(("state", cid, state.model_dump(mode="json")))
+        return items
+
+    synced = watch_manager.resync(_source)
+    return {"synced": synced, "current_version": watch_manager.cache.get_current_version()}
 
 
 @streaming_router.websocket("/cluster/{cluster_id}")

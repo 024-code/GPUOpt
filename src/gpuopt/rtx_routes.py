@@ -47,8 +47,18 @@ def get_cluster_status() -> dict:
                 "pcie_link_gen": g.pcie_link_gen,
                 "pcie_link_width": g.pcie_link_width,
                 "is_available": g.is_available,
+                "partition_id": g.partition_id,
+                "physical_gpu_index": g.physical_gpu_index,
             }
             for g in state.gpus
+        ],
+        "partitions": [
+            {
+                "id": p.id,
+                "node_name": p.node_name,
+                "vram_gb": p.gb,
+            }
+            for p in manager.partitions
         ],
         "cpu": {
             "cores": state.cpu_cores,
@@ -93,11 +103,26 @@ def list_gpus() -> list[dict]:
             "ecc_errors": g.ecc_errors,
             "pcie_link_gen": g.pcie_link_gen,
             "pcie_link_width": g.pcie_link_width,
+            "partition_id": g.partition_id,
+            "physical_gpu_index": g.physical_gpu_index,
             "health_status": (
                 "healthy" if g.temperature_celsius < 80 and g.utilization_percent < 95 else "warning"
             ),
         }
         for g in state.gpus
+    ]
+
+
+@router.get("/partitions")
+def list_partitions() -> list[dict]:
+    return [
+        {
+            "id": p.id,
+            "node_name": p.node_name,
+            "vram_gb": p.gb,
+            "status": "active",
+        }
+        for p in manager.partitions
     ]
 
 
@@ -138,6 +163,14 @@ def detect_cluster() -> dict:
             "cuda_version": state.gpus[0].cuda_version if state.gpus else "N/A",
             "driver_version": state.gpus[0].driver_version if state.gpus else "N/A",
         },
+        "partitions": [
+            {
+                "id": p.id,
+                "node_name": p.node_name,
+                "vram_gb": p.gb,
+            }
+            for p in manager.partitions
+        ],
         "timestamp": state.timestamp.isoformat(),
     }
 
@@ -157,6 +190,7 @@ def get_metrics() -> dict:
             "total_utilization": round(state.total_gpu_usage_percent, 1),
             "average_temperature": round(avg_temp, 1),
             "total_power_watts": round(state.total_power_watts, 1),
+            "partitions": len(manager.partitions),
             "details": [
                 {
                     "gpu": g.index,
@@ -164,6 +198,7 @@ def get_metrics() -> dict:
                     "memory_used_gb": round(g.memory_used_gb, 1),
                     "temperature": round(g.temperature_celsius, 1),
                     "power": round(g.power_usage_watts, 1),
+                    "partition_id": g.partition_id,
                 }
                 for g in state.gpus
             ],

@@ -87,20 +87,30 @@ def create_v2_router() -> APIRouter:
 
     # ── Clusters ────────────────────────────────────────────
 
+    def _cluster_status(repo, cluster_id):
+        from datetime import datetime, timezone
+        state = repo.latest_state(cluster_id)
+        if state is None:
+            return "unknown"
+        age = (datetime.now(timezone.utc) - state.collected_at).total_seconds()
+        return "healthy" if age < 300 else "warning"
+
+    def _cluster_dict(c, repo):
+        return {
+            "id": str(c.id),
+            "name": c.name,
+            "environment": c.environment,
+            "connector_type": c.connector_type.value if hasattr(c.connector_type, "value") else str(c.connector_type),
+            "description": c.description or "",
+            "region": c.region or "",
+            "status": _cluster_status(repo, c.id),
+            "created_at": c.created_at.isoformat() if c.created_at else "",
+        }
+
     @router.get("/clusters")
     def list_clusters() -> list[dict]:
         repo = get_repository()
-        return [
-            {
-                "id": str(c.id),
-                "name": c.name,
-                "environment": c.environment,
-                "connector_type": c.connector_type.value if hasattr(c.connector_type, "value") else str(c.connector_type),
-                "description": c.description or "",
-                "created_at": c.created_at.isoformat() if c.created_at else "",
-            }
-            for c in repo.list_clusters()
-        ]
+        return [_cluster_dict(c, repo) for c in repo.list_clusters()]
 
     @router.get("/clusters/{cluster_id}")
     def get_cluster(cluster_id: UUID) -> dict:
@@ -108,14 +118,7 @@ def create_v2_router() -> APIRouter:
         c = repo.get_cluster(cluster_id)
         if c is None:
             return {"error": "not_found"}
-        return {
-            "id": str(c.id),
-            "name": c.name,
-            "environment": c.environment,
-            "connector_type": c.connector_type.value if hasattr(c.connector_type, "value") else str(c.connector_type),
-            "description": c.description or "",
-            "created_at": c.created_at.isoformat() if c.created_at else "",
-        }
+        return _cluster_dict(c, repo)
 
     # ── RL Scheduler ────────────────────────────────────────
 

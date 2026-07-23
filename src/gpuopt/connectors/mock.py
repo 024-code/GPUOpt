@@ -92,6 +92,14 @@ class MockConnector(ClusterConnector):
 
     @staticmethod
     def _default_snapshot() -> dict[str, Any]:
+        import random
+        MEM_TOTAL = 25769803776
+        gpu_profiles = [
+            {"util": 72, "mem_used": int(MEM_TOTAL * 0.65), "temp": 68, "power": 320},
+            {"util": 45, "mem_used": int(MEM_TOTAL * 0.30), "temp": 54, "power": 180},
+            {"util": 88, "mem_used": int(MEM_TOTAL * 0.80), "temp": 76, "power": 390},
+            {"util": 12, "mem_used": int(MEM_TOTAL * 0.05), "temp": 38, "power": 55},
+        ]
         return {
             "api_server": {"ready": True, "version": "mock-v1"},
             "nodes": [{
@@ -104,12 +112,12 @@ class MockConnector(ClusterConnector):
                         "index": i,
                         "uuid": f"mock-gpu-{i:04d}",
                         "model": "RTX 4090",
-                        "memory_total": 25769803776,
-                        "memory_used": 0,
-                        "utilization_gpu": 0.0,
-                        "utilization_memory": 0.0,
-                        "temperature_gpu": 35.0,
-                        "power_draw": 30.0,
+                        "memory_total": MEM_TOTAL,
+                        "memory_used": gpu_profiles[i]["mem_used"],
+                        "utilization_gpu": gpu_profiles[i]["util"] + random.uniform(-5, 5),
+                        "utilization_memory": gpu_profiles[i]["util"] * random.uniform(0.7, 1.0),
+                        "temperature_gpu": gpu_profiles[i]["temp"] + random.uniform(-3, 3),
+                        "power_draw": gpu_profiles[i]["power"] + random.uniform(-20, 20),
                         "power_limit": 450.0,
                         "ecc_errors_volatile": 0,
                         "ecc_errors_aggregate": 0,

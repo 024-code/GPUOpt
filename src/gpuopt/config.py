@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     env: str = "development"
-    database_path: Path = Path("./data/gpuopt.db")
+    database_path: Path = Path("/data/gpuopt.db")
     database_url: str = ""
     database_pool_min: int = 2
     database_pool_max: int = 10
@@ -44,10 +44,19 @@ class Settings(BaseSettings):
     gatekeeper_api_url: str = ""
     gatekeeper_enabled: bool = False
 
+    agent_heartbeat_timeout: int = 180
+    agent_stale_check_interval: int = 60
+    agent_mtls_enabled: bool = False
+    agent_mtls_cert_file: str = ""
+    agent_mtls_key_file: str = ""
+    agent_mtls_ca_cert_file: str = ""
+    agent_mtls_verify_client: bool = True
+
     slack_webhook_url: str = ""
     pagerduty_routing_key: str = ""
     opsgenie_api_key: str = ""
     deepseek_api_key: str = ""
+    rtx_partitions_gb: str = ""
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

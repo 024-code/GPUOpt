@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      GPUOPT_ENV: development
+      GPUOPT_DATABASE_PATH: /data/gpuopt.db
+      GPUOPT_LOG_LEVEL: INFO
+      GPUOPT_ALLOW_MOCK_GPU: "false"
+      GPUOPT_RTX_PARTITIONS_GB: "6,6,6,6"
+      GPUOPT_API_HOST: "0.0.0.0"
+      GPUOPT_API_PORT: "8080"
+    volumes:
+      - gpuopt-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  gpuopt-data:

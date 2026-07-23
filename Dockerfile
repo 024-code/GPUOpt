@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev &
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY pyproject.toml README.md /app/
+COPY pyproject.toml README.md gunicorn.conf.py /app/
 COPY src /app/src
+COPY frontend /app/frontend
 RUN pip install --upgrade pip && \
     pip install .[postgres,notifications] gunicorn && \
     find /usr/local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -42,6 +43,7 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 WORKDIR /app
 
+RUN mkdir -p /data && chown 10001:10001 /data
 USER 10001
 EXPOSE 8080
 

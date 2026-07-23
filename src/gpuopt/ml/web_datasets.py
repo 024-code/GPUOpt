@@ -15,7 +15,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "datasets"
+DATA_DIR = Path(os.environ.get("GPUOPT_DATA_DIR", "/data")) / "datasets"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DATASET_REGISTRY: dict[str, dict[str, Any]] = {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import time
 from datetime import datetime, timezone
@@ -42,7 +43,7 @@ KNOWN_MODELS: dict[str, dict[str, Any]] = {
 
 
 class DeploymentWorkflowService:
-    DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "workflows"
+    DATA_DIR = Path(os.environ.get("GPUOPT_DATA_DIR", "/data")) / "workflows"
 
     def __init__(self) -> None:
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)

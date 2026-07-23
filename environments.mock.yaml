@@ -2,6 +2,26 @@ clusters:
   - name: local-mock
     environment: sandbox
     connector_type: mock
-    description: Local no-GPU validation using a synthetic snapshot.
+    description: Local mock GPU cluster for development.
+    region: us-east-1
     options:
       snapshot_path: sandbox/mock-clusters/local-kind.json
+  - name: training-cluster
+    environment: staging
+    connector_type: mock
+    description: Staging cluster for ML training workloads.
+    region: us-west-2
+    options: {}
+  - name: production-inference
+    environment: production
+    connector_type: mock
+    description: Production inference serving cluster.
+    region: eu-west-1
+    options: {}
+  - name: rtx4090-cluster
+    environment: sandbox
+    connector_type: mock
+    description: RTX 4090 4-node cluster with 6GB VRAM used per GPU.
+    region: us-east-1
+    options:
+      snapshot_path: sandbox/mock-clusters/rtx4090-cluster.json

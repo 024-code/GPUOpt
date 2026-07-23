@@ -307,6 +307,10 @@ class TenantManager:
         self.repository = repository
         self._teams: dict[str, Team] = {}
         self._projects: dict[str, Project] = {}
+        self._quotas: dict[str, ResourceQuota] = {}
+        self._isolation_policies: dict[str, dict] = {}
+        self._tenant_users: dict[str, list[str]] = {}
+        self._namespace_mapping: dict[str, str] = {}
 
     def create_team(self, team: Team) -> Team:
         team.id = uuid4()
@@ -322,12 +326,19 @@ class TenantManager:
     def delete_team(self, team_id: UUID) -> bool:
         if str(team_id) in self._teams:
             del self._teams[str(team_id)]
+            if str(team_id) in self._isolation_policies:
+                del self._isolation_policies[str(team_id)]
             return True
         return False
 
     def create_project(self, project: Project) -> Project:
         project.id = uuid4()
         self._projects[str(project.id)] = project
+        if project.team_id:
+            tid = str(project.team_id)
+            if tid not in self._namespace_mapping:
+                safe_name = project.name.lower().replace(" ", "-")[:20]
+                self._namespace_mapping[str(project.id)] = f"gpuopt-{tid[:8]}-{safe_name}"
         return project
 
     def get_project(self, project_id: UUID) -> Project | None:
@@ -342,6 +353,10 @@ class TenantManager:
     def delete_project(self, project_id: UUID) -> bool:
         if str(project_id) in self._projects:
             del self._projects[str(project_id)]
+            if str(project_id) in self._quotas:
+                del self._quotas[str(project_id)]
+            if str(project_id) in self._namespace_mapping:
+                del self._namespace_mapping[str(project_id)]
             return True
         return False
 
@@ -354,9 +369,13 @@ class TenantManager:
         gpu_count = len(clusters) * random.randint(2, 8)
         util = random.uniform(30, 90)
         violations = []
+
+        custom_q = self._quotas.get(str(project_id))
         quota = ResourceQuota(
             project_id=project_id,
-            max_gpus=64, max_clusters=10, max_monthly_cost_usd=50000.0,
+            max_gpus=custom_q.max_gpus if custom_q else 64,
+            max_clusters=custom_q.max_clusters if custom_q else 10,
+            max_monthly_cost_usd=custom_q.max_monthly_cost_usd if custom_q else 50000.0,
             current_gpu_count=gpu_count, current_cluster_count=len(clusters),
             current_monthly_cost=round(total_cost, 2), gpu_utilization=round(util, 1),
         )
@@ -367,6 +386,51 @@ class TenantManager:
         quota.quota_exceeded = len(violations) > 0
         quota.violations = violations
         return quota
+
+    def set_quota(self, project_id: UUID, quota: ResourceQuota) -> None:
+        self._quotas[str(project_id)] = quota
+
+    def add_tenant_user(self, team_id: str, username: str) -> None:
+        if team_id not in self._tenant_users:
+            self._tenant_users[team_id] = []
+        if username not in self._tenant_users[team_id]:
+            self._tenant_users[team_id].append(username)
+
+    def remove_tenant_user(self, team_id: str, username: str) -> bool:
+        if team_id in self._tenant_users and username in self._tenant_users[team_id]:
+            self._tenant_users[team_id].remove(username)
+            return True
+        return False
+
+    def get_tenant_users(self, team_id: str) -> list[str]:
+        return list(self._tenant_users.get(team_id, []))
+
+    def set_isolation_policy(self, team_id: str, policy: dict) -> None:
+        self._isolation_policies[str(team_id)] = policy
+
+    def get_isolation_policy(self, team_id: str) -> dict | None:
+        return self._isolation_policies.get(str(team_id))
+
+    def get_namespace_for_project(self, project_id: str) -> str:
+        return self._namespace_mapping.get(project_id, "default")
+
+    def check_tenant_access(self, tenant_id: str, namespace: str) -> bool:
+        if not self._isolation_policies.get(tenant_id, {}).get("namespace_isolation", True):
+            return True
+        mapping = self._namespace_mapping
+        for pid, ns in mapping.items():
+            if ns == namespace:
+                project = self._projects.get(pid)
+                if project and str(project.team_id) == tenant_id:
+                    return True
+        return False
+
+    def set_project_quota(self, project_id: UUID, max_gpus: int = 64,
+                           max_clusters: int = 10, max_monthly_cost: float = 50000.0) -> None:
+        self._quotas[str(project_id)] = ResourceQuota(
+            project_id=project_id, max_gpus=max_gpus, max_clusters=max_clusters,
+            max_monthly_cost_usd=max_monthly_cost,
+        )
 
 
 class CostAnomalyDetector:

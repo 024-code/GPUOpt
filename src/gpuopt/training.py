@@ -4,6 +4,7 @@ import json
 import logging
 import math
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -35,7 +36,7 @@ class TrainingService:
     training setups.
     """
 
-    DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "training"
+    DATA_DIR = Path(os.environ.get("GPUOPT_DATA_DIR", "/data")) / "training"
 
     def __init__(self) -> None:
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)

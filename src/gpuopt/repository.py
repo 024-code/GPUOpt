@@ -78,6 +78,10 @@ class SqliteBackend(DatabaseBackend):
     def initialize(self) -> None:
         with self._lock, self.connect() as conn:
             conn.executescript(SCHEMA_SQL)
+            try:
+                conn.execute("ALTER TABLE clusters ADD COLUMN region TEXT")
+            except Exception:
+                pass
 
 
 class PostgresBackend(DatabaseBackend):
@@ -568,9 +572,9 @@ class ClusterRepository:
         sql, _ = self._fmt(
             "INSERT INTO clusters ("
             "id, name, environment, connector_type, description, kube_context, "
-            "kubeconfig_path, in_cluster, credential_ref, options_json, "
+            "kubeconfig_path, in_cluster, credential_ref, region, options_json, "
             "created_at, updated_at"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         try:
             with self._backend.connect() as conn:
@@ -579,7 +583,7 @@ class ClusterRepository:
                     record.connector_type.value, record.description,
                     record.kube_context, record.kubeconfig_path,
                     int(record.in_cluster), record.credential_ref,
-                    json.dumps(record.options),
+                    record.region, json.dumps(record.options),
                     record.created_at.isoformat(),
                     record.updated_at.isoformat(),
                 ))
@@ -600,7 +604,8 @@ class ClusterRepository:
         sql, _ = self._fmt(
             "UPDATE clusters SET "
             "environment=?, connector_type=?, description=?, kube_context=?, "
-            "kubeconfig_path=?, in_cluster=?, credential_ref=?, options_json=?, updated_at=? "
+            "kubeconfig_path=?, in_cluster=?, credential_ref=?, region=?, "
+            "options_json=?, updated_at=? "
             "WHERE id=?"
         )
         with self._backend.connect() as conn:
@@ -608,7 +613,8 @@ class ClusterRepository:
                 updated.environment, updated.connector_type.value,
                 updated.description, updated.kube_context,
                 updated.kubeconfig_path, int(updated.in_cluster),
-                updated.credential_ref, json.dumps(updated.options),
+                updated.credential_ref, updated.region,
+                json.dumps(updated.options),
                 updated.updated_at.isoformat(), str(updated.id),
             ))
         return updated
@@ -1271,19 +1277,21 @@ class ClusterRepository:
 
     @staticmethod
     def _row_to_cluster(row: Any) -> ClusterRecord:
+        d = dict(row)
         return ClusterRecord(
-            id=UUID(row["id"]),
-            name=row["name"],
-            environment=row["environment"],
-            connector_type=row["connector_type"],
-            description=row["description"],
-            kube_context=row["kube_context"],
-            kubeconfig_path=row["kubeconfig_path"],
-            in_cluster=bool(row["in_cluster"]),
-            credential_ref=row["credential_ref"],
-            options=json.loads(row["options_json"]),
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
+            id=UUID(d["id"]),
+            name=d["name"],
+            environment=d["environment"],
+            connector_type=d["connector_type"],
+            description=d["description"],
+            kube_context=d["kube_context"],
+            kubeconfig_path=d["kubeconfig_path"],
+            in_cluster=bool(d["in_cluster"]),
+            credential_ref=d["credential_ref"],
+            region=d.get("region"),
+            options=json.loads(d["options_json"]),
+            created_at=datetime.fromisoformat(d["created_at"]),
+            updated_at=datetime.fromisoformat(d["updated_at"]),
         )
 
     @staticmethod

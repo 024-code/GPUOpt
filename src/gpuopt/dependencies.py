@@ -21,6 +21,11 @@ from .training import TrainingService
 from .inference.service import InferenceService
 from .finops import FinOpsService
 from .power import PowerService
+from .agent_protocol import AgentRegistry, get_agent_registry
+from .dcgm_ingestion import DcgmIngestionPipeline, get_dcgm_pipeline
+from .watch_stream import WatchManager, get_watch_manager
+from .workload_attribution import WorkloadAttributionEngine, get_attribution_engine
+from .explanation_service import ExplanationService, get_explanation_service
 from .rbac import RBACManager
 
 
@@ -156,3 +161,8 @@ def get_dashboard_service() -> DashboardService:
 @lru_cache(maxsize=1)
 def get_report_scheduler() -> ReportScheduler:
     return ReportScheduler()
+
+@lru_cache(maxsize=1)
+def get_agent_registry() -> AgentRegistry:
+    from .agent_protocol import get_agent_registry as _get_registry
+    return _get_registry()

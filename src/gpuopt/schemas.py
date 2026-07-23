@@ -30,6 +30,7 @@ class ClusterCreate(BaseModel):
     kubeconfig_path: str | None = None
     in_cluster: bool = False
     credential_ref: str | None = None
+    region: str | None = Field(default=None, max_length=100)
     options: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("kubeconfig_path")
@@ -44,6 +45,7 @@ class ClusterRecord(ClusterCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID = Field(default_factory=uuid4)
+    status: str = Field(default="unknown")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

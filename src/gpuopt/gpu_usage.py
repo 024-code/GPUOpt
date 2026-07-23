@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -23,7 +24,7 @@ GPU_MEMORY_MAP: dict[str, float] = {
 class GpuInventoryService:
 
     def __init__(self) -> None:
-        self._data_dir = Path(__file__).resolve().parents[2] / "data" / "inference"
+        self._data_dir = Path(os.environ.get("GPUOPT_DATA_DIR", "/data")) / "inference"
         self._data_dir.mkdir(parents=True, exist_ok=True)
 
     def _inventory_path(self, cluster_id: UUID) -> Path:

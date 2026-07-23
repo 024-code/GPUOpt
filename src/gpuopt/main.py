@@ -48,6 +48,7 @@ from .environment_checks_router import router as environment_checks_router
 from .ml.router import router as ml_router
 from .ollama.router import router as ollama_router
 from .deepseek.router import router as deepseek_router
+from .intelligence.router import intelligence_router
 from .ratelimit import RateLimitMiddleware
 from .streaming import streaming_router
 from .s24_routes import s24_router
@@ -124,10 +125,9 @@ app = FastAPI(
     title="GPUOpt Backend Sandbox",
     version=__version__,
     description=(
-        "Read-only Kubernetes environment registration, GPU platform readiness checks, "
-        "telemetry normalization, cluster state querying, trace replay, "
-        "baseline comparison, workload analysis, optimization recommendations, "
-        "Use this sandbox before implementing predictive scheduling and automated actuation."
+        "GPU Cluster Intelligence Platform. Cross-cluster optimization, predictive failure-aware orchestration, "
+        "automated idle GPU reclamation, adaptive scheduling, digital twin simulation, "
+        "ML-driven workload placement, and FinOps cost optimization for GPU/CPU clusters."
     ),
     lifespan=lifespan,
 )
@@ -184,7 +184,8 @@ app.include_router(ml_router)
 app.include_router(ollama_router)
 app.include_router(deepseek_router)
 app.include_router(streaming_router)
+app.include_router(intelligence_router)
 
-frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
+frontend_dir = Path(os.environ.get("GPUOPT_FRONTEND_DIR", "/app/frontend"))
 if frontend_dir.is_dir():
     app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
