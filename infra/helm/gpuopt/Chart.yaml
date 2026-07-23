@@ -1,0 +1,24 @@
+apiVersion: v2
+name: gpuopt
+description: GPU cluster intelligence platform - Helm chart for Kubernetes deployment
+type: application
+version: 0.1.0
+appVersion: 0.13.0
+home: https://github.com/024-code/GPUOpt
+sources:
+  - https://github.com/024-code/GPUOpt
+maintainers:
+  - name: GPUOpt Team
+    email: 251-16-024@diu.edu.bd
+icon: https://raw.githubusercontent.com/024-code/GPUOpt/main/docs/icon.png
+keywords:
+  - gpu
+  - cluster
+  - kubernetes
+  - optimization
+  - inference
+kubeVersion: ">=1.25.0-0"
+annotations:
+  artifacthub.io/containsSecurityUpdates: "true"
+  artifacthub.io/changes: |
+    - Initial Helm chart for GPUOpt deployment

@@ -1,0 +1,52 @@
+name: Terraform CI
+
+on:
+  push:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform.yml"
+    branches: [main, develop]
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+    branches: [main]
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive infra/terraform/
+      - name: Terraform validate
+        run: |
+          for dir in infra/terraform/ infra/terraform/environments/dev infra/terraform/environments/prod; do
+            echo "Validating $dir"
+            cd "$dir"
+            terraform init -backend=false || true
+            terraform validate
+            cd -
+          done
+
+  checkov:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Checkov on Terraform
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform/
+          framework: terraform
+          soft_fail: true
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov-terraform
+        continue-on-error: true

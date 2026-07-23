@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gpuopt.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "gpuopt.labels" . | nindent 4 }}
+data:
+  GPUOPT_ENV: {{ .Values.env.GPUOPT_ENV | quote }}
+  GPUOPT_DATABASE_PATH: {{ .Values.env.GPUOPT_DATABASE_PATH | quote }}
+  GPUOPT_ALLOW_MOCK_GPU: {{ .Values.env.GPUOPT_ALLOW_MOCK_GPU | quote }}
+  GPUOPT_LOG_LEVEL: {{ .Values.env.GPUOPT_LOG_LEVEL | quote }}
+  GPUOPT_API_HOST: {{ .Values.env.GPUOPT_API_HOST | quote }}
+  GPUOPT_API_PORT: {{ .Values.env.GPUOPT_API_PORT | quote }}
+  {{- if eq .Values.database.type "postgres" }}
+  GPUOPT_DATABASE_URL: {{ include "gpuopt.databaseUrl" . | quote }}
+  {{- end }}

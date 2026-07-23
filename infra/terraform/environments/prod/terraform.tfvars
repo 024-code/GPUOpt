@@ -1,0 +1,10 @@
+environment           = "prod"
+rds_enabled           = true
+gpu_node_enabled      = true
+eks_node_desired_size = 3
+eks_node_min_size     = 2
+eks_node_max_size     = 10
+gpuopt_replicas       = 3
+rds_instance_class    = "db.r6g.large"
+rds_allocated_storage = 100
+domain_name           = "gpuopt.example.com"

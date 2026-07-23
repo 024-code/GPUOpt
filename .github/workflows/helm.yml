@@ -1,0 +1,50 @@
+name: Helm Chart Release
+
+on:
+  push:
+    paths:
+      - "infra/helm/**"
+      - ".github/workflows/helm.yml"
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: latest
+      - name: Lint Helm chart
+        run: helm lint infra/helm/gpuopt
+
+  package-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: latest
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package Helm chart
+        run: |
+          helm package infra/helm/gpuopt --destination .chart-output
+
+      - name: Push Helm chart to GHCR
+        run: |
+          helm push .chart-output/gpuopt-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts

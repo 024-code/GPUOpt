@@ -7,6 +7,7 @@ TRIVY_REPORT ?= trivy-results.sarif
 .PHONY: migrate-new migrate-history migrate-current
 .PHONY: compose-up compose-down kind-up kind-down port-forward
 .PHONY: sast deps-scan secrets-scan container-scan sbom security-all
+.PHONY: helm-lint helm-package terraform-fmt terraform-validate terraform-plan
 
 install:
 	$(PYTHON) -m pip install -e '.[dev]'
@@ -80,3 +81,28 @@ sbom:
 	trivy image --format cyclonedx --output gpuopt-backend.sbom.json gpuopt-backend:sbom
 
 security-all: sast deps-scan
+
+# ── Helm targets ─────────────────────────────────────────────
+
+helm-lint:
+	helm lint infra/helm/gpuopt
+
+helm-package:
+	helm package infra/helm/gpuopt --destination .chart-output
+
+# ── Terraform targets ────────────────────────────────────────
+
+terraform-fmt:
+	terraform fmt -recursive infra/terraform/
+
+terraform-validate:
+	terraform -chdir=infra/terraform/ init -backend=false
+	terraform -chdir=infra/terraform/ validate
+
+terraform-plan-dev:
+	terraform -chdir=infra/terraform/ init
+	terraform -chdir=infra/terraform/ plan -var-file=environments/dev/terraform.tfvars -out=.tfplan-dev
+
+terraform-plan-prod:
+	terraform -chdir=infra/terraform/ init
+	terraform -chdir=infra/terraform/ plan -var-file=environments/prod/terraform.tfvars -out=.tfplan-prod

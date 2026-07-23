@@ -1,0 +1,19 @@
+{{- if .Values.prometheus.enabled }}
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "gpuopt.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "gpuopt.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "gpuopt.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      interval: {{ .Values.prometheus.serviceMonitor.interval }}
+      path: {{ .Values.prometheus.serviceMonitor.path }}
+{{- end }}
+{{- end }}

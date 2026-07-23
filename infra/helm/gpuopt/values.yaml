@@ -1,0 +1,110 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/024-code/gpuopt
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+env:
+  GPUOPT_ENV: production
+  GPUOPT_DATABASE_PATH: /data/gpuopt.db
+  GPUOPT_ALLOW_MOCK_GPU: "true"
+  GPUOPT_LOG_LEVEL: INFO
+  GPUOPT_API_HOST: 0.0.0.0
+  GPUOPT_API_PORT: "8080"
+
+database:
+  type: sqlite
+  url: ""
+  postgres:
+    host: ""
+    port: 5432
+    user: gpuopt
+    password: gpuopt
+    database: gpuopt
+    existingSecret: ""
+    existingSecretKey: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+rbac:
+  create: true
+  clusterReadOnly: true
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1
+    memory: 512Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: gpuopt.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+probes:
+  liveness:
+    path: /health/live
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    initialDelaySeconds: 3
+    periodSeconds: 5
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+prometheus:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 15s
+    path: /metrics
+
+grafana:
+  enabled: false
+  dashboards:
+    enabled: false
