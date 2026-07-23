@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GPUOpt — Cluster Intelligence Platform</title>
-  <link rel="stylesheet" href="css/style.css?v=2">
+  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f8cff' stroke-width='2'><rect x='4' y='4' width='16' height='16' rx='2'/><path d='M9 12h6M12 9v6'/></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <meta name="description" content="GPUOpt — GPU Cluster Intelligence Platform. Monitor, optimize, and manage GPU clusters with real-time telemetry, ML-driven insights, and automated scheduling.">
+  <meta name="theme-color" content="#070b14">
 </head>
 <body>
   <div id="app">
@@ -263,7 +266,7 @@
             <div class="card"><div class="card-header"><h3>GPU Details</h3></div><div class="card-body" id="rtxGpus"><p class="placeholder">Detecting RTX 4090...</p></div></div>
             <div class="card"><div class="card-header"><h3>System Resources</h3></div><div class="card-body" id="rtxSystem"><p class="placeholder">Loading...</p></div></div>
           </div>
-          <div class="card"><div class="card-header"><h3>Submit Job to RTX 4090</h3></div><div class="card-body"><form id="rtxJobForm" onsubmit="submitRtxJob(event)"><div class="form-row"><div class="form-group"><label>Job Name</label><input type="text" id="rtxJobName" value="LLM Training"></div><div class="form-group"><label>GPUs</label><input type="number" id="rtxGpuCount" value="1" min="1"></div></div><div class="form-row"><div class="form-group"><label>Memory (GB)</label><input type="number" id="rtxMemory" value="16" step="0.1"></div><div class="form-group"><label>Runtime (hrs)</label><input type="number" id="rtxRuntime" value="2.0" step="0.1"></div></div><div class="form-row"><div class="form-group"><label>Priority</label><input type="number" id="rtxPriority" value="5" min="1" max="10"></div><div class="form-group" style="display:flex;align-items:flex-end;gap:8px"><button type="submit" class="btn btn-primary">Submit Job</button><button type="button" class="btn" onclick="simulateRtxJob()">Simulate First</button></div></div></form></div></div>
+          <div class="card"><div class="card-header"><h3>Submit Job to RTX 4090</h3></div><div class="card-body"><form id="rtxJobForm" onsubmit="submitRtxJob(event)"><div class="form-row"><div class="form-group"><label>Job Name</label><input type="text" id="rtxJobName" value="LLM Training"></div><div class="form-group"><label>GPUs</label><input type="number" id="rtxGpuCount" value="1" min="1"></div></div><div class="form-row"><div class="form-group"><label>Memory (GB)</label><input type="number" id="rtxMemory" value="16" step="0.1"></div><div class="form-group"><label>Runtime (hrs)</label><input type="number" id="rtxRuntime" value="2.0" step="0.1"></div></div><div class="form-row"><div class="form-group"><label>Priority</label><input type="number" id="rtxPriority" value="5" min="1" max="10"></div><div class="form-group" style="display:flex;align-items:flex-end;gap:8px"><button type="submit" class="btn btn-primary" id="rtxSubmitBtn">Submit Job</button><button type="button" class="btn" onclick="simulateRtxJob()">Simulate First</button></div></div></form></div></div>
           <div class="card"><div class="card-header"><h3>Jobs</h3></div><div class="card-body" id="rtxJobs"><p class="placeholder">No jobs submitted</p></div></div>
           <div class="card" style="display:none" id="rtxResultCard"><div class="card-header"><h3>Result</h3></div><div class="card-body" id="rtxResult"></div></div>
         </section>
@@ -272,7 +275,7 @@
     </main>
   </div>
 
-  <script src="js/api.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/api.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>

@@ -106,7 +106,7 @@ const wsClient = {
 
     let url = '';
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = 'localhost:8080';
+    const host = window.location.host;
 
     switch (channel) {
       case 'cluster': url = `${protocol}//${host}/api/v1/stream/cluster/${clusterId}`; break;
