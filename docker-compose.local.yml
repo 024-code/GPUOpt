@@ -1,3 +1,14 @@
+x-shared-env: &shared-env
+  GPUOPT_ENV: development
+  GPUOPT_DATABASE_PATH: /data/gpuopt.db
+  GPUOPT_LOG_LEVEL: INFO
+  GPUOPT_ALLOW_MOCK_GPU: "false"
+  GPUOPT_RTX_PARTITIONS_GB: "6,6,6,6"
+  GPUOPT_API_HOST: "0.0.0.0"
+  GPUOPT_API_PORT: "8080"
+  VLLM_BASE_URL: "http://vllm:8000"
+  VLLM_CONTAINER_NAME: "gpuopt-vllm-1"
+
 services:
   api:
     build:
@@ -6,13 +17,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      GPUOPT_ENV: development
-      GPUOPT_DATABASE_PATH: /data/gpuopt.db
-      GPUOPT_LOG_LEVEL: INFO
-      GPUOPT_ALLOW_MOCK_GPU: "false"
-      GPUOPT_RTX_PARTITIONS_GB: "6,6,6,6"
-      GPUOPT_API_HOST: "0.0.0.0"
-      GPUOPT_API_PORT: "8080"
+      <<: *shared-env
     volumes:
       - gpuopt-data:/data
     deploy:
@@ -22,6 +27,42 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    depends_on:
+      vllm:
+        condition: service_started
+
+  vllm:
+    image: vllm/vllm-openai:v0.6.6.post1
+    container_name: gpuopt-vllm-1
+    command:
+      - "--model"
+      - "Qwen/Qwen2.5-3B-Instruct"
+      - "--port"
+      - "8000"
+      - "--gpu-memory-utilization"
+      - "0.9"
+      - "--max-model-len"
+      - "8192"
+    ports:
+      - "8001:8000"
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+    volumes:
+      - vllm-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/models')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
 volumes:
   gpuopt-data:
+  vllm-cache:

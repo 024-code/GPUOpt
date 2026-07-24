@@ -45,13 +45,19 @@ from .deployment_workflow_router import router as deployment_workflow_router
 from .gpu_usage_inventory_router import router as gpu_usage_inventory_router
 from .optimization_analysis_router import router as optimization_analysis_router
 from .environment_checks_router import router as environment_checks_router
+from .risk_modules_router import router as risk_modules_router
+from .risk_r02_router import router as risk_r02_router
+from .risk_r03_router import router as risk_r03_router
+from .risk_r04_router import router as risk_r04_router
 from .ml.router import router as ml_router
 from .ollama.router import router as ollama_router
 from .deepseek.router import router as deepseek_router
 from .intelligence.router import intelligence_router
+from .observability.router import router as observability_router
 from .ratelimit import RateLimitMiddleware
 from .streaming import streaming_router
 from .s24_routes import s24_router
+from .vllm_router import router as vllm_router
 from .versioning import V1DeprecationMiddleware, create_v2_router, mount_v2
 
 
@@ -179,12 +185,18 @@ app.include_router(deployment_workflow_router)
 app.include_router(gpu_usage_inventory_router)
 app.include_router(optimization_analysis_router)
 app.include_router(environment_checks_router)
+app.include_router(risk_modules_router)
+app.include_router(risk_r02_router)
+app.include_router(risk_r03_router)
+app.include_router(risk_r04_router)
 app.include_router(rtx_router)
 app.include_router(ml_router)
 app.include_router(ollama_router)
 app.include_router(deepseek_router)
 app.include_router(streaming_router)
 app.include_router(intelligence_router)
+app.include_router(observability_router)
+app.include_router(vllm_router)
 
 frontend_dir = Path(os.environ.get("GPUOPT_FRONTEND_DIR", "/app/frontend"))
 if frontend_dir.is_dir():
